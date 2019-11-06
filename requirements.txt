@@ -1,0 +1,9 @@
+chainer==6.4.0
+filelock==3.0.12
+nltk==3.4.5
+numpy==1.17.3
+Pillow==6.2.1
+protobuf==3.7.1
+six==1.12.0
+typing==3.6.6
+typing-extensions==3.6.6
