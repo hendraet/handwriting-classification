@@ -116,3 +116,6 @@ chainer_examples/
 google-fonts/
 signature-embedding/
 text-generator/generated-images/*
+.idea/*
+etc/
+share/
