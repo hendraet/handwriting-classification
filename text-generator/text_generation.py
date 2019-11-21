@@ -28,7 +28,8 @@ def generate_image(txt):
     font = font_dir + '/' + font_name
     img_fraction = 0.90
 
-    img = Image.new('RGB', (100, 42), (255, 255, 255))
+    # TODO: Irgendwie immer auch gleiche Höhe bringen und Breite egal
+    img = Image.new('RGB', .conf(100, 42), (255, 255, 255))
     d = ImageDraw.Draw(img)
 
     img_font = ImageFont.truetype(font, fontsize)

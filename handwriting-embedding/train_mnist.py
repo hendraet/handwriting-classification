@@ -1,12 +1,14 @@
-"""This script serves as a simple example and test for the DNN"""
 import configparser
 import itertools
+
+import matplotlib as matplotlib
 import random
 import sys
+from sklearn.decomposition import PCA
 
 import numpy as np
 import triplet
-from chainer import Chain
+from chainer import Chain, serializers
 from chainer import cuda
 from chainer import functions as F
 from chainer import links as L
@@ -14,7 +16,10 @@ from chainer import optimizers, report, training
 from chainer.datasets import get_mnist
 from chainer.training import extensions
 from triplet_iterator import TripletIterator
+from chainer import backend
 
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 class MLP(Chain):
     def __init__(self, n_units, n_out):
@@ -43,10 +48,6 @@ class Classifier(Chain):
         return loss
 
 
-def usage():
-    print("python3 {} <config_file.ini>".format(sys.argv[0]))
-
-
 def get_trainer(updater, evaluator, epochs):
     trainer = training.Trainer(updater, (epochs, 'epoch'), out='result')
     trainer.extend(evaluator)
@@ -60,81 +61,117 @@ def get_trainer(updater, evaluator, epochs):
     return trainer
 
 
-def order_set(dataset):
-    dataset_sorted = sorted(dataset, key=lambda tup: tup[1])
-
-    dataset_one = [dataset_sorted[i] for i in range(0, len(dataset_sorted), 3)]
-    dataset_two = [dataset_sorted[i] for i in range(1, len(dataset_sorted), 3)]
-    dataset_three = [dataset_sorted[i] for i in range(2, len(dataset_sorted), 3)]
-
-    # random.shuffle(dataset_three)
-    dataset_shuffled = []
-    block_size = int(len(dataset_three) / 10)  # Only works well enough if divisble by 10 obviously
+def generate_triplet_part(dataset, negative):
+    triplet_part = []
     for i in range(0, 10):
-        first = dataset_three[:i * block_size]
-        second = dataset_three[(i + 1) * block_size:]
-        combined = first + second
-        sample = random.sample(combined, block_size)
-        dataset_shuffled.extend(sample)
+        for j in range(0, int(len(dataset) / 30)):
+            while True:
+                sample_idx = random.randint(0, len(dataset) - 1)
+                sample = dataset[sample_idx]
+                if negative:
+                    if sample[1] != i:
+                        triplet_part.append(sample)
+                        break
+                else:
+                    if sample[1] == i:
+                        triplet_part.append(sample)
+                        break
+    return triplet_part
 
-    iters = [iter(dataset_one), iter(dataset_two), iter(dataset_shuffled)]
+
+def generate_triplet(dataset):
+    anchors = generate_triplet_part(dataset, False)
+    positives = generate_triplet_part(dataset, False)
+    negatives = generate_triplet_part(dataset, True)
+
+    iters = [iter(anchors), iter(positives), iter(negatives)]
     merged = list(next(it) for it in itertools.cycle(iters))
 
-    return [tup[0] for tup in merged]
+    return zip(*merged)
 
 
-def main():
-    if not len(sys.argv) == 2:
-        usage()
-        exit(1)
+config = configparser.ConfigParser()
+config.read('mnist.conf')
 
-    config = configparser.ConfigParser()
-    config.read(sys.argv[1])
+batch_size = int(config['TRAINING']['batch_size'])
+epochs = int(config['TRAINING']['epochs'])
+lr = float(config['TRAINING']['lr'])
+lr_interval = int(config['TRAINING']['lr_interval'])
+gpu = int(config['TRAINING']['gpu'])
 
-    batch_size = int(config['TRAINING']['batch_size'])
-    epochs = int(config['TRAINING']['epochs'])
-    lr = float(config['TRAINING']['lr'])
-    lr_interval = int(config['TRAINING']['lr_interval'])
-    gpu = int(config['TRAINING']['gpu'])
+xp = cuda.cupy if gpu >= 0 else np
 
-    xp = cuda.cupy if gpu >= 0 else np
+train, test = get_mnist(withlabel=True)
 
-    # TODO: change GPU in conf
-    train, test = get_mnist(withlabel=True)
+train_merged, train_labels = generate_triplet(train)
+assert not [i for (i, label) in enumerate(train_labels[0::3]) if label == train_labels[i * 3 + 2]]
+print("Train Done")
 
-    train_merged = order_set(train)
+test_merged, test_labels = generate_triplet(test)
+assert not [i for (i, label) in enumerate(test_labels[0::3]) if label == test_labels[i * 3 + 2]]
 
-    # TODO: Doesn't work out too well for test set (some points are missing)
-    # test = test[:-1]
-    test_merged = order_set(test)
-    test_merged = test_merged[:-2]
+print("Test Done")
 
-    train_iter = TripletIterator(train_merged,
-                                 batch_size=batch_size,
-                                 repeat=True,
-                                 xp=xp)
-    test_iter = TripletIterator(test_merged,
-                                batch_size=batch_size,
-                                xp=xp)
-    base_model = MLP(100, 10)
-    model = Classifier(base_model)
+# %% md
 
-    if gpu >= 0:
-        cuda.get_device(gpu).use()
-        model.to_gpu()
+### Train and Save Model
 
-    optimizer = optimizers.SGD(lr=lr)
-    optimizer.setup(model)
-    updater = triplet.Updater(train_iter, optimizer)
+# %%
 
-    evaluator = triplet.Evaluator(test_iter, model)
+train_iter = TripletIterator(train_merged,
+                             batch_size=batch_size,
+                             repeat=True,
+                             xp=xp)
+test_iter = TripletIterator(test_merged,
+                            batch_size=batch_size,
+                            xp=xp)
+base_model = MLP(1024, 10)
+model = Classifier(base_model)
 
-    trainer = get_trainer(updater, evaluator, epochs)
-    trainer.run()
+if gpu >= 0:
+    # cuda.get_device(gpu).use()
+    backend.get_device(gpu).use()
+    model.to_gpu()
 
-    # for img in test_merged:
-    #     embedding = model(img)
+optimizer = optimizers.Adam(alpha=lr)
+optimizer.setup(model)
+updater = triplet.Updater(train_iter, optimizer)
+
+evaluator = triplet.Evaluator(test_iter, model)
+
+trainer = get_trainer(updater, evaluator, epochs)
+trainer.run()
+
+serializers.save_npz('full_model.npz', model)
+serializers.save_npz('embeddings.npz', base_model)
+
+# %% md
+
+### Create Embeddings
+
+# %%
+
+# base_model = MLP(100, 10)
+# serializers.load_npz('embeddings.npz', base_model)
+
+embeddings = []
+
+for img in test_merged:
+    embedding = base_model(xp.reshape(xp.array(img), (1, 784)))
+    embedding_flat = np.squeeze(cuda.to_cpu(embedding.array))
+    embeddings.append(embedding_flat)
 
 
-if __name__ == '__main__':
-    main()
+X = np.array(embeddings)
+pca = PCA(n_components=2)
+fitted_data = pca.fit_transform(X)
+
+# %%
+
+# % matplotlib inline
+#
+plt.scatter(fitted_data[:, 0], fitted_data[:, 1], c=test_labels)
+plt.savefig("test.png")
+
+print("Done")
+#
