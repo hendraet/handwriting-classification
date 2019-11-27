@@ -100,7 +100,7 @@ def main():
         info = {
             'string': generated_string,
             'type': string_type,
-            'path': img_path,
+            'path': img_path,  # TODO: might consider fixing this
             'font': font_name
         }
         img_list.append(info)
