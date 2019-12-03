@@ -8,10 +8,17 @@ import triplet
 
 from PIL import Image
 from chainer import Chain, training, report, cuda, backend, serializers, optimizers
+from chainer.links.model.vision.resnet import _global_average_pooling_2d
 from chainer.training import extensions
 from chainer import functions as F
+from sklearn.decomposition import PCA
 from triplet_iterator import TripletIterator
 from resnet import ResNet
+
+import matplotlib
+
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 class Classifier(Chain):
@@ -23,6 +30,19 @@ class Classifier(Chain):
         loss = F.triplet(y_a, y_p, y_n)
         report({'loss': loss}, self)
         return loss
+
+
+class PooledResNet(Chain):
+    def __init__(self, n_layers):
+        super(PooledResNet, self).__init__()
+
+        with self.init_scope():
+            self.feature_extractor = ResNet(n_layers)
+
+    def __call__(self, x):
+        h = self.feature_extractor(x)
+        h = _global_average_pooling_2d(h)
+        return h
 
 
 def get_trainer(updater, evaluator, epochs):
@@ -131,24 +151,54 @@ def main():
     test_iter = TripletIterator(test_triplet,
                                 batch_size=batch_size,
                                 xp=xp)
-    base_model = ResNet(18)
-    model = Classifier(base_model)
+
+    # # base_model = ResNet(18)
+    # base_model = PooledResNet(18)
+    # # backend.get_device(gpu).use()
+    # # pooled_res.to_gpu()
+    #
+    # model = Classifier(base_model) #TODO global average pooling vorschalten
+    #
+    # if gpu >= 0:
+    #     backend.get_device(gpu).use()
+    #     model.to_gpu()
+    #
+    # optimizer = optimizers.Adam(alpha=lr)
+    # optimizer.setup(model)
+    # updater = triplet.Updater(train_iter, optimizer)
+    #
+    # evaluator = triplet.Evaluator(test_iter, model)
+    #
+    # trainer = get_trainer(updater, evaluator, epochs)
+    # trainer.run()
+    #
+    # # serializers.save_npz('full_model.npz', model)
+    # serializers.save_npz('embeddings_resnet_own.npz', base_model)
+
+    base_model = PooledResNet(18)
+    serializers.load_npz('embeddings_resnet_own.npz', base_model)
 
     if gpu >= 0:
         backend.get_device(gpu).use()
-        model.to_gpu()
+        base_model.to_gpu()
 
-    optimizer = optimizers.Adam(alpha=lr)
-    optimizer.setup(model)
-    updater = triplet.Updater(train_iter, optimizer)
+    embeddings = []
 
-    evaluator = triplet.Evaluator(test_iter, model)
+    for img in test_triplet:
+        embedding = base_model(xp.reshape(xp.array(img), (1, 3, 30, 160)))
+        embedding_flat = np.squeeze(cuda.to_cpu(embedding.array))
+        embeddings.append(embedding_flat)
 
-    trainer = get_trainer(updater, evaluator, epochs)
-    trainer.run()
+    X = np.array(embeddings)
+    pca = PCA(n_components=2)
+    fitted_data = pca.fit_transform(X)
 
-    # serializers.save_npz('full_model.npz', model)
-    serializers.save_npz('embeddings_resnet_own.npz', base_model)
+    ######################### Plot ###############################
+
+    plt.scatter(fitted_data[:, 0], fitted_data[:, 1], c=[0 if label == 'num' else 1 for label in test_labels]) # TODO
+    plt.savefig("own_resnet.png")
+
+    print("Done")
 
 
 if __name__ == '__main__':
