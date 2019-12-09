@@ -1,5 +1,7 @@
 import argparse
+from datetime import datetime
 import json
+import time
 
 import nltk
 import os
@@ -10,14 +12,33 @@ from nltk.corpus import words
 
 
 def generate_number():
-    return str(random.randint(1000, 1000000))
+    if bool(random.getrandbits(1)):
+        return str(random.randint(1000, 1000000))
+    else:
+        return str(random.randint(0, 100))
 
 
 def generate_date():
-    day = str(random.randint(1, 31)).zfill(2)
-    month = str(random.randint(1, 12)).zfill(2)
-    year = str(random.randint(0, 99)).zfill(2) if random.randint(0, 2) is 0 else str(random.randint(1000, 2020))
-    return '.'.join([day, month, year])
+    # Would be nice to support:
+    # DD.MM.YY
+    # DD.MM.YYYY
+    # MM/DD/YYYY
+    # MM/DD/YY
+    # DD. Mon YYYY
+    # DD. Month YYYY
+    # Month YY
+    # DD. Month
+    # DD. Mon
+    date_formats = ['%d.%m.%y', '%d.%m.%Y', '%m/%d/%y', '%m/%d/%Y', '%d. %B %Y', '%d. %b %Y', '%B %y', '%d. %B',
+                    '%d. %b']
+
+    start = datetime.strptime('01.01.1000', '%d.%m.%Y')
+    end = datetime.strptime('01.01.2020', '%d.%m.%Y')
+    delta = end - start
+
+    rand_date = start + delta * random.random()
+
+    return rand_date.strftime(random.choice(date_formats))
 
 
 def generate_text(word_list):
@@ -51,12 +72,13 @@ def generate_image(txt):
 
 def main():
     parser = argparse.ArgumentParser(description='Generating images with random text')
-    parser.add_argument('-d', '--dir', type=str, default='text-generator/generated-images/',
+    parser.add_argument('-d', '--dir', type=str, default='prep/generated-images/',
                         help='path to directory where images should be stored')
     parser.add_argument('-n', '--num', type=int, default=1, help='num of images to be generated')
     parser.add_argument('-t', '--type', type=str, choices=['date', 'text', 'num'], default='date',
                         help='type of text to be generated')
     parser.add_argument('-s', '--show', action='store_true', help='show image(s) after generation')
+    parser.add_argument('-p', '--json_img_path', type=str, help='dir path that should be written to json')
     parser.add_argument('--save', action='store_true', help='save image(s) after generation')
     args = parser.parse_args()
 
@@ -64,6 +86,7 @@ def main():
     show_image = args.show
     save_image = args.save
     img_dir = args.dir
+    json_img_dir = args.json_img_path
     json_path = img_dir + 'data' + '.json'
     img_list = []
 
@@ -86,9 +109,10 @@ def main():
             exit(1)
 
         img, font_name, text_dimensions = generate_image(generated_string)
-        # print(text_dimensions)
-        img_name = generated_string + '-' + os.path.splitext(font_name)[0]
+        cleansed_string = generated_string.replace("/", "_").replace(" ", "_")
+        img_name = cleansed_string + '-' + os.path.splitext(font_name)[0]
         img_path = img_dir + img_name + '.png'
+        json_img_path = json_img_dir + img_name + '.png'
 
         if show_image:
             img.show()
@@ -100,7 +124,7 @@ def main():
         info = {
             'string': generated_string,
             'type': string_type,
-            'path': img_path,  # TODO: might consider fixing this
+            'path': json_img_path,
             'font': font_name
         }
         img_list.append(info)

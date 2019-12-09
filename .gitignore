@@ -119,3 +119,7 @@ text-generator/generated-images/*
 .idea/*
 etc/
 share/
+handwriting-embedding/*.npz
+.idea
+cluster_images
+washingtondb-v1.0
