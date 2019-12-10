@@ -50,7 +50,7 @@ def generate_image(txt):
     font_dir = 'google-fonts'
     font_name = random.choice(os.listdir(font_dir))
     font = font_dir + '/' + font_name
-    target_dimensions = (160, 30)
+    target_dimensions = (350, 60)
 
     img_font = ImageFont.truetype(font, fontsize)
     text_dimensions = img_font.getsize(txt)
