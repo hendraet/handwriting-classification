@@ -27,7 +27,7 @@ class Classifier(Chain):
 
     def __call__(self, x_a, x_p, x_n):
         y_a, y_p, y_n = (self.predictor(x) for x in (x_a, x_p, x_n))
-        loss = F.triplet(y_a, y_p, y_n)
+        loss = F.triplet(y_a, y_p, y_n, margin=2)
         report({'loss': loss}, self)
         return loss
 
@@ -59,9 +59,13 @@ def get_trainer(updater, evaluator, epochs):
 
 
 def image_to_array(path):
-    img = Image.open(path)
-    img_array = np.array(img, dtype='float32')
-    img_array /= 255
+    try:
+        img = Image.open(path)
+        img_array = np.array(img, dtype='float32')
+        img_array /= 255
+    except:
+        print(path)
+        img_array = np.zeros((30, 160, 3))
     return np.transpose(img_array, (2, 0, 1))
 
 
@@ -72,8 +76,7 @@ def generate_datasets(json_paths):
     for dataset_path in json_paths:
         with open(dataset_path, 'r') as f:
             json_file = json.load(f)
-            dataset = [(image_to_array(sample['path']), 'num' if sample['type'] == 'num' else 'text') for sample in
-                       json_file]
+            dataset = [(image_to_array(sample['path']), sample['type']) for sample in json_file]
             threshold = int(len(dataset) * 0.9)
             # Datasets should be shuffled if generated differently
             train.extend(dataset[:threshold])
@@ -118,6 +121,10 @@ def generate_triplet(dataset, classes):
 def main():
     ###################### CONFIG ############################
 
+    retrain = False
+    model_name = 'embeddings_nums_vs_txt'
+    print("RETRAIN:", str(retrain), "MODEL_NAME:", model_name)
+
     config = configparser.ConfigParser()
     config.read('mnist.conf')
 
@@ -131,60 +138,63 @@ def main():
 
     #################### DATASETS ###########################
 
+    # classes = ['num', 'text', 'date']
+    # train, test = generate_datasets(['datasets/nums.json', 'datasets/texts.json', 'datasets/dates.json'])
     classes = ['num', 'text']
-    train, test = generate_datasets(['datasets/num.json', 'datasets/texts.json'])
+    train, test = generate_datasets(['datasets/numbers_only_washington.json', 'datasets/words_only_washington.json'])
+    print("Datasets loaded.")
 
     train_triplet, train_labels = generate_triplet(train, classes)
     assert not [i for (i, label) in enumerate(train_labels[0::3]) if label == train_labels[i * 3 + 2]]
-    print("Train Done")
+    print("Train done.")
 
+    test.extend(train) # TODO
     test_triplet, test_labels = generate_triplet(test, classes)
     assert not [i for (i, label) in enumerate(test_labels[0::3]) if label == test_labels[i * 3 + 2]]
-    print("Test Done")
+    print("Test done.")
 
     #################### Train and Save Model ########################################
 
-    train_iter = TripletIterator(train_triplet,
-                                 batch_size=batch_size,
-                                 repeat=True,
-                                 xp=xp)
-    test_iter = TripletIterator(test_triplet,
-                                batch_size=batch_size,
-                                xp=xp)
+    if retrain:
+        train_iter = TripletIterator(train_triplet,
+                                     batch_size=batch_size,
+                                     repeat=True,
+                                     xp=xp)
+        test_iter = TripletIterator(test_triplet,
+                                    batch_size=batch_size,
+                                    xp=xp)
 
-    # # base_model = ResNet(18)
-    # base_model = PooledResNet(18)
-    # # backend.get_device(gpu).use()
-    # # pooled_res.to_gpu()
-    #
-    # model = Classifier(base_model) #TODO global average pooling vorschalten
-    #
-    # if gpu >= 0:
-    #     backend.get_device(gpu).use()
-    #     model.to_gpu()
-    #
-    # optimizer = optimizers.Adam(alpha=lr)
-    # optimizer.setup(model)
-    # updater = triplet.Updater(train_iter, optimizer)
-    #
-    # evaluator = triplet.Evaluator(test_iter, model)
-    #
-    # trainer = get_trainer(updater, evaluator, epochs)
-    # trainer.run()
-    #
-    # # serializers.save_npz('full_model.npz', model)
-    # serializers.save_npz('embeddings_resnet_own.npz', base_model)
+        base_model = PooledResNet(18)
+        model = Classifier(base_model)
 
-    base_model = PooledResNet(18)
-    serializers.load_npz('embeddings_resnet_own.npz', base_model)
+        if gpu >= 0:
+            backend.get_device(gpu).use()
+            model.to_gpu()
 
-    if gpu >= 0:
-        backend.get_device(gpu).use()
-        base_model.to_gpu()
+        optimizer = optimizers.Adam(alpha=lr)
+        optimizer.setup(model)
+        updater = triplet.Updater(train_iter, optimizer)
+
+        evaluator = triplet.Evaluator(test_iter, model)
+
+        trainer = get_trainer(updater, evaluator, epochs)
+        trainer.run()
+
+        serializers.save_npz(model_name + '.npz', base_model)
+    else:
+        base_model = PooledResNet(18)
+        serializers.load_npz(model_name + '.npz', base_model)
+
+        if gpu >= 0:
+            backend.get_device(gpu).use()
+            base_model.to_gpu()
 
     embeddings = []
 
-    for img in test_triplet:
+    for (i, img) in enumerate(test_triplet):
+        # TODO: add output for porgress
+        if i % int(len(test_triplet) / 10) == 0:
+            print(str(i / len(test_triplet) * 100) + "% done")
         embedding = base_model(xp.reshape(xp.array(img), (1, 3, 30, 160)))
         embedding_flat = np.squeeze(cuda.to_cpu(embedding.array))
         embeddings.append(embedding_flat)
@@ -195,7 +205,9 @@ def main():
 
     ######################### Plot ###############################
 
-    plt.scatter(fitted_data[:, 0], fitted_data[:, 1], c=[0 if label == 'num' else 1 for label in test_labels]) # TODO
+    colour_mapping = {'date': 'red', 'text': 'yellow', 'num': 'black'}
+
+    plt.scatter(fitted_data[:, 0], fitted_data[:, 1], c=[colour_mapping[label] for label in test_labels])
     plt.savefig("own_resnet.png")
 
     print("Done")

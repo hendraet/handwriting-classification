@@ -116,37 +116,38 @@ def main():
 
     #################### Train and Save Model ########################################
 
-    train_iter = TripletIterator(train_merged,
-                                 batch_size=batch_size,
-                                 repeat=True,
-                                 xp=xp)
-    test_iter = TripletIterator(test_merged,
-                                batch_size=batch_size,
-                                xp=xp)
-    base_model = ResNet(18)
-    model = Classifier(base_model)
-
-    if gpu >= 0:
-        # cuda.get_device(gpu).use()
-        backend.get_device(gpu).use()
-        model.to_gpu()
-
-    optimizer = optimizers.Adam(alpha=lr)
-    optimizer.setup(model)
-    updater = triplet.Updater(train_iter, optimizer)
-
-    evaluator = triplet.Evaluator(test_iter, model)
-
-    trainer = get_trainer(updater, evaluator, epochs)
-    trainer.run()
-
-    serializers.save_npz('mnist_resnet_full_model.npz', model)
-    serializers.save_npz('mnist_resnet_embeddings.npz', base_model)
+    # train_iter = TripletIterator(train_merged,
+    #                              batch_size=batch_size,
+    #                              repeat=True,
+    #                              xp=xp)
+    # test_iter = TripletIterator(test_merged,
+    #                             batch_size=batch_size,
+    #                             xp=xp)
+    # base_model = ResNet(18)
+    # model = Classifier(base_model)
+    #
+    # if gpu >= 0:
+    #     # cuda.get_device(gpu).use()
+    #     backend.get_device(gpu).use()
+    #     model.to_gpu()
+    #
+    # optimizer = optimizers.Adam(alpha=lr)
+    # optimizer.setup(model)
+    # updater = triplet.Updater(train_iter, optimizer)
+    #
+    # evaluator = triplet.Evaluator(test_iter, model)
+    #
+    # trainer = get_trainer(updater, evaluator, epochs)
+    # trainer.run()
+    #
+    # serializers.save_npz('mnist_resnet_full_model.npz', model)
+    # serializers.save_npz('mnist_resnet_embeddings.npz', base_model)
 
     ###################### Create Embeddings ####################################
 
     base_model = ResNet(18)
     serializers.load_npz('embeddings.npz', base_model)
+    # serializers.load_npz('mnist_resnet_embeddings.npz', base_model)
 
     if gpu >= 0:
         backend.get_device(gpu).use()

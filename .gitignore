@@ -116,10 +116,11 @@ chainer_examples/
 google-fonts/
 signature-embedding/
 text-generator/generated-images/*
-.idea/*
 etc/
 share/
 handwriting-embedding/*.npz
+handwriting-embedding/result
 .idea
 cluster_images
 washingtondb-v1.0
+datasets
