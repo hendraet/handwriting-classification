@@ -55,7 +55,7 @@ def generate_image(txt):
     img_font = ImageFont.truetype(font, fontsize)
     text_dimensions = img_font.getsize(txt)
 
-    img = Image.new('RGB', text_dimensions, (255, 255, 255))
+    img = Image.new('RGB', text_dimensions, (255, 255, 255))  # TODO: save as grayscale
     d = ImageDraw.Draw(img)
 
     d.text((0, 0), txt, fill=(0, 0, 0), font=img_font)
@@ -71,8 +71,9 @@ def generate_image(txt):
 
 
 def main():
+    assert False, "Removed TODO so that generated images are only grayscale?"
     parser = argparse.ArgumentParser(description='Generating images with random text')
-    parser.add_argument('-d', '--dir', type=str, default='prep/generated-images/',
+    parser.add_argument('-d', '--dir', type=str, default='prep/datasets/',
                         help='path to directory where images should be stored')
     parser.add_argument('-n', '--num', type=int, default=1, help='num of images to be generated')
     parser.add_argument('-t', '--type', type=str, choices=['date', 'text', 'num'], default='date',
