@@ -1,25 +1,41 @@
-from os.path import isfile, join, splitext
-
-import os
+import json
 
 from PIL import Image
+from os.path import join
 
-indir = '../washingtondb-v1.0/data/word_images_normalized/'
-outdir = 'generated-images/'
-target_dimensions = (160, 30)
 
-images = [f for f in os.listdir(indir) if isfile(join(indir, f)) and splitext(f)[1] == '.png']
+# Useful for recursive traversion:
+# tmp = [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(indir)) for f in fn]
 
-for img_path in images[:3]:
-    img = Image.open(join(indir, img_path))
+def resize_img(img, target_dimensions):
     ratio = target_dimensions[1] / img.size[1]
     new_dimensions = tuple([int(dim * ratio) for dim in img.size])
     resized_img = img.resize(new_dimensions)  # TODO
-    padded_img = Image.new('RGB', target_dimensions, (0, 0, 0))
+    padded_img = Image.new('L', target_dimensions)
     padded_img.paste(resized_img, ((target_dimensions[0] - new_dimensions[0]) // 2,
                                    (target_dimensions[1] - new_dimensions[1]) // 2))
+    return padded_img
 
-    # padded_img.show()
-    new_img_path = join(outdir, img_path)
-    with open(new_img_path, 'wb+') as img_file:
-        padded_img.save(img_file, format='PNG')
+
+def main():
+    outdir = 'datasets/'
+    indir = '../datasets/iamdb/'
+    json_path = 'dataset_descriptions/numbers_iamdb.json'
+    target_dimensions = (350, 60)
+
+    with open(json_path, 'r') as j_file:
+        num_json = json.load(j_file)
+
+    images = [i['path'] for i in num_json]
+    for img_path in images[:1000]:
+        img = Image.open(join(indir, img_path))
+        padded_img = resize_img(img, target_dimensions)
+
+        # padded_img.show()
+        new_img_path = join(outdir, img_path)
+        with open(new_img_path, 'wb+') as img_file:
+            padded_img.save(img_file, format='PNG')
+
+
+if __name__ == '__main__':
+    main()

@@ -37,7 +37,6 @@ def get_numbers(infile):
                 image_path = image_dir.split('-')[0] + '/' + image_dir + '/' + word.attrib['id'] + '.png'
                 text = word.attrib['text']
                 if all(char.isdigit() for char in text):
-                    # print(image_path, text)
                     mapping.append({
                         'string': text,
                         'type': 'num',
