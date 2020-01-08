@@ -1,1 +1,4 @@
-generated-images
+datasets
+__pycache__
+dataset_descriptions/*
+
