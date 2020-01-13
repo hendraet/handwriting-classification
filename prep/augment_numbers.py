@@ -40,19 +40,24 @@ seq = iaa.Sequential([
 ], random_order=True)  # apply augmenters in random order
 
 images = np.array([np.array(Image.open(img['path'])) for img in image_infos])
+
 images = np.repeat(images, SCALE_FACTOR, axis=0)
 image_infos = np.repeat(np.array(image_infos), SCALE_FACTOR, axis=0)
 
 # Make batches out of single images because processing multiple images at once leads to errors because the resulting
 # images have different shapes and therefore can't be organised in a numpy array -> leads to an internal error
 for idx, img in enumerate(images):
-    img_aug = seq(images=np.expand_dims(img, axis=0))
-    pil_img = Image.fromarray(np.squeeze(img_aug), 'L')
-    padded_img = resize_img(pil_img, TARGET_DIMENSIONS)
-
     old_filename = os.path.splitext(os.path.basename(image_infos[idx]['path']))[0]
     new_filename = old_filename + '-' + str(idx % SCALE_FACTOR + 1) + '.png'
     new_img_path = os.path.join(IMG_OUT_DIR, new_filename)
+
+    if SAVE_ORIGINAL and idx % SCALE_FACTOR == 0:
+        with open(os.path.join(IMG_OUT_DIR, old_filename + '.png'), 'wb+') as orig_img_file:
+            resize_img(Image.fromarray(img), TARGET_DIMENSIONS).save(orig_img_file, format='PNG')
+
+    img_aug = seq(images=np.expand_dims(img, axis=0))
+    pil_img = Image.fromarray(np.squeeze(img_aug), 'L')
+    padded_img = resize_img(pil_img, TARGET_DIMENSIONS)
 
     with open(new_img_path, 'wb+') as img_file:
         padded_img.save(img_file, format='PNG')
