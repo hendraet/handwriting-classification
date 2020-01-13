@@ -19,6 +19,10 @@ class Updater(StandardUpdater):
     """
 
     def update_core(self):
+        with chainer.using_device(self.device):
+            self.update_network()
+
+    def update_network(self):
         batches = self._iterators['main'].next()
         in_vars = (variable.Variable(self.converter(batch, self.device))
                    for batch in batches)
@@ -35,6 +39,10 @@ class Evaluator(Evaluator):
     """
 
     def evaluate(self):
+        with chainer.using_device(self.device):
+            return self.evaluate_core()
+
+    def evaluate_core(self):
         iterator = self._iterators['main']
         target = self._targets['main']
         eval_func = self.eval_func or target
