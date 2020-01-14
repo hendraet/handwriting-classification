@@ -137,6 +137,7 @@ def draw_embeddings_cluster(filename, model, labels, dataset, xp):
 
     # Plot TODO: fix that plots are overlapping each other
     colour_mapping = {'date': 'red', 'text': 'yellow', 'num': 'black'}
+    plt.clf()
     plt.scatter(fitted_data[:, 0], fitted_data[:, 1], c=[colour_mapping[label] for label in labels])
     plt.savefig('result/' + filename)
 
