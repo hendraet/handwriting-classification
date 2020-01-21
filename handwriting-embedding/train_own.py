@@ -13,10 +13,12 @@ from chainer import Chain, training, report, cuda, backend, serializers, optimiz
 from chainer.links.model.vision.resnet import _global_average_pooling_2d
 from chainer.training import extensions
 from chainer import functions as F
+from matplotlib.cbook import get_sample_data
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import matplotlib.image as mpimg
 from sklearn.decomposition import PCA
 from triplet_iterator import TripletIterator
 from resnet import ResNet
-
 
 import matplotlib
 
@@ -114,31 +116,90 @@ def generate_triplet(dataset, classes):
     negatives = generate_triplet_part(dataset, True, classes)
 
     iters = [iter(anchors), iter(positives), iter(negatives)]
-    merged = list(next(it) for it in itertools.cycle(iters)) # Works until python 3.6
+    merged = list(next(it) for it in itertools.cycle(iters))  # Works until python 3.6
 
     return zip(*merged)
 
 
-def draw_embeddings_cluster(filename, model, labels, dataset, xp):
+def imscatter(x, y, image, ax=None, zoom=1.0):
+    im = OffsetImage(image, zoom=zoom) # wants array not path
+    x, y = np.atleast_1d(x, y)
+    artists = []
+    for x0, y0 in zip(x, y):
+        ab = AnnotationBbox(im, (x0, y0), xycoords='data', frameon=False)
+        artists.append(ax.add_artist(ab))
+    ax.update_datalim(np.column_stack([x, y]))
+    ax.autoscale()
+    return artists
+
+
+def get_pca(dataset, model, xp):
     with chainer.using_device(model.device):
         # Create Embeddings
         embeddings = []
+        batch_size = 128  # TODO: remove magic number
 
-        for (i, img) in enumerate(dataset): # TODO: Add batch processing
-            if i % int(len(dataset) / 10) == 0:
-                print(str(i / len(dataset) * 100) + "% done")
-            embedding = model(xp.reshape(xp.array(img), (1,) + img.shape))
-            embedding_flat = np.squeeze(cuda.to_cpu(embedding.array))
-            embeddings.append(embedding_flat)
-
+        for i in range(0, len(dataset), batch_size):
+            batch = xp.array(list(dataset[i:i + batch_size]))
+            embedding_batch = model(batch)
+            embedding_flat = cuda.to_cpu(embedding_batch.array)
+            embeddings.extend(embedding_flat)
+            print('.', end='')
+        print()
     X = np.array(embeddings)
     pca = PCA(n_components=2)
     fitted_data = pca.fit_transform(X)
+    x = fitted_data[:, 0]
+    y = fitted_data[:, 1]
+    return x, y
 
-    # Plot TODO: fix that plots are overlapping each other
-    colour_mapping = {'date': 'red', 'text': 'yellow', 'num': 'black'}
+
+def draw_embeddings_cluster(filename, model, labels, dataset, xp):
+    x, y = get_pca(dataset, model, xp)
+
+    # colour_mapping = {'date': 'blue', 'text': 'red', 'num': 'black'}
+    plot_mapping = {
+        'date': {
+            'colour': 'blue',
+            'string': 'Date'
+        },
+        'text': {
+            'colour': 'red',
+            'string': 'Word'
+        },
+        'num':  {
+            'colour': 'black',
+            'string': 'Number'
+        },
+    }
     plt.clf()
-    plt.scatter(fitted_data[:, 0], fitted_data[:, 1], c=[colour_mapping[label] for label in labels])
+    plts = []
+    plot_labels = []
+    for item in plot_mapping.values():
+        colour = item['colour']
+        new_x = []
+        new_y = []
+        for idx, label in enumerate(labels):
+            if plot_mapping[label]['colour'] == colour:
+                new_x.append(x[idx])
+                new_y.append(y[idx])
+        if len(new_x) > 0 and len(new_y) > 0:
+            plts.append(plt.scatter(new_x, new_y, c=colour))
+            plot_labels.append(item['string'])
+
+    plt.legend(plts, plot_labels)
+    plt.savefig('result/' + filename, dpi=600)
+
+
+def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp):
+    x, y = get_pca(dataset, model, xp)
+    colour_mapping = {'date': 'blue', 'text': 'red', 'num': 'black'}
+
+    image_path = get_sample_data('ada.png')
+    img = mpimg.imread(image_path)
+    fig, ax = plt.subplots()
+    imscatter(x, y, img, zoom=0.001, ax=ax)
+    ax.scatter(x, y, c=[colour_mapping[label] for label in labels])
     plt.savefig('result/' + filename)
 
 
@@ -151,16 +212,16 @@ class ClusterPlotter(training.Extension):
 
     def __call__(self, trainer):
         epoch = trainer.updater.epoch
-        draw_embeddings_cluster('cluster_epoch_{}.png'.format(epoch), self._model, self._labels, self._dataset, self._xp)
+        draw_embeddings_cluster('cluster_epoch_{}.png'.format(epoch), self._model, self._labels, self._dataset,
+                                self._xp)
 
 
 def main():
     ###################### CONFIG ############################
 
-    retrain = True
+    retrain = False
     model_name = 'iamdb_nums_vs_txt'
     plot_loss = True
-    print("RETRAIN:", str(retrain), "MODEL_NAME:", model_name)
 
     json_files = ['datasets/iamdb_nums_aug.json', 'datasets/iamdb_words_aug.json']
     classes = ['num', 'text']
@@ -175,6 +236,8 @@ def main():
     gpu = config['TRAINING']['gpu']
 
     xp = cuda.cupy if int(gpu) >= 0 else np
+
+    print("RETRAIN:", str(retrain), "MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size), "EPOCHS:", str(epochs))
 
     #################### DATASETS ###########################
 
@@ -221,10 +284,11 @@ def main():
         base_model = PooledResNet(18)
         serializers.load_npz(model_name + '.npz', base_model)
 
-        if gpu >= 0:
+        if int(gpu) >= 0:
             backend.get_device(gpu).use()
             base_model.to_gpu()
         draw_embeddings_cluster('cluster_final.png', base_model, test_labels, test_triplet, xp)
+        # draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp)
 
     print("Done")
 
