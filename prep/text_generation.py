@@ -47,7 +47,7 @@ def generate_text(word_list):
 
 def generate_image(txt):
     fontsize = 30
-    font_dir = 'google-fonts'
+    font_dir = '../google-fonts'
     font_name = random.choice(os.listdir(font_dir))
     font = font_dir + '/' + font_name
     target_dimensions = (350, 60)
@@ -55,10 +55,10 @@ def generate_image(txt):
     img_font = ImageFont.truetype(font, fontsize)
     text_dimensions = img_font.getsize(txt)
 
-    img = Image.new('RGB', text_dimensions, (255, 255, 255))  # TODO: save as grayscale
+    img = Image.new('L', text_dimensions, 255)
     d = ImageDraw.Draw(img)
 
-    d.text((0, 0), txt, fill=(0, 0, 0), font=img_font)
+    d.text((0, 0), txt, fill=0, font=img_font)
 
     ratio = target_dimensions[1] / text_dimensions[1]
     new_dimensions = tuple([int(dim * ratio) for dim in text_dimensions])
@@ -71,16 +71,18 @@ def generate_image(txt):
 
 
 def main():
-    assert False, "Removed TODO so that generated images are only grayscale?"
+    assert(False, 'Dates DD Month YYYY have to be fixed')
     parser = argparse.ArgumentParser(description='Generating images with random text')
-    parser.add_argument('-d', '--dir', type=str, default='prep/datasets/',
+    parser.add_argument('-d', '--dir', type=str, default='datasets/',
                         help='path to directory where images should be stored')
     parser.add_argument('-n', '--num', type=int, default=1, help='num of images to be generated')
     parser.add_argument('-t', '--type', type=str, choices=['date', 'text', 'num'], default='date',
                         help='type of text to be generated')
     parser.add_argument('-s', '--show', action='store_true', help='show image(s) after generation')
-    parser.add_argument('-p', '--json_img_path', type=str, help='dir path that should be written to json')
+    parser.add_argument('-p', '--json_img_path', type=str, default='datasets/',
+                        help='dir path that should be written to json')
     parser.add_argument('--save', action='store_true', help='save image(s) after generation')
+    parser.add_argument('-j', '--json_name', type=str, help='name of the json file')
     args = parser.parse_args()
 
     string_type = args.type
@@ -88,7 +90,7 @@ def main():
     save_image = args.save
     img_dir = args.dir
     json_img_dir = args.json_img_path
-    json_path = img_dir + 'data' + '.json'
+    json_path = img_dir + args.json_name + '.json'
     img_list = []
 
     if string_type == 'text':

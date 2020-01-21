@@ -1,4 +1,5 @@
 import json
+import os
 
 from PIL import Image
 from os.path import join
@@ -19,15 +20,16 @@ def resize_img(img, target_dimensions):
 
 def main():
     outdir = 'datasets/'
-    indir = '../datasets/iamdb/'
-    json_path = 'dataset_descriptions/numbers_iamdb.json'
+    indir = 'datasets/'
+    json_path = 'datasets/dates.json'
     target_dimensions = (350, 60)
 
     with open(json_path, 'r') as j_file:
         num_json = json.load(j_file)
 
     images = [i['path'] for i in num_json]
-    for img_path in images[:1000]:
+    for img_path in images:
+        img_path = os.path.basename(img_path)
         img = Image.open(join(indir, img_path))
         padded_img = resize_img(img, target_dimensions)
 
