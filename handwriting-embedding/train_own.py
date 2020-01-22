@@ -13,12 +13,11 @@ from chainer import Chain, training, report, cuda, backend, serializers, optimiz
 from chainer.links.model.vision.resnet import _global_average_pooling_2d
 from chainer.training import extensions
 from chainer import functions as F
-from matplotlib.cbook import get_sample_data
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-import matplotlib.image as mpimg
 from sklearn.decomposition import PCA
 from triplet_iterator import TripletIterator
 from resnet import ResNet
+from black_rect_removal import remove_black_rect
 
 import matplotlib
 
@@ -121,18 +120,6 @@ def generate_triplet(dataset, classes):
     return zip(*merged)
 
 
-def imscatter(x, y, image, ax=None, zoom=1.0):
-    im = OffsetImage(image, zoom=zoom) # wants array not path
-    x, y = np.atleast_1d(x, y)
-    artists = []
-    for x0, y0 in zip(x, y):
-        ab = AnnotationBbox(im, (x0, y0), xycoords='data', frameon=False)
-        artists.append(ax.add_artist(ab))
-    ax.update_datalim(np.column_stack([x, y]))
-    ax.autoscale()
-    return artists
-
-
 def get_pca(dataset, model, xp):
     with chainer.using_device(model.device):
         # Create Embeddings
@@ -157,7 +144,6 @@ def get_pca(dataset, model, xp):
 def draw_embeddings_cluster(filename, model, labels, dataset, xp):
     x, y = get_pca(dataset, model, xp)
 
-    # colour_mapping = {'date': 'blue', 'text': 'red', 'num': 'black'}
     plot_mapping = {
         'date': {
             'colour': 'blue',
@@ -191,16 +177,56 @@ def draw_embeddings_cluster(filename, model, labels, dataset, xp):
     plt.savefig('result/' + filename, dpi=600)
 
 
-def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp):
-    x, y = get_pca(dataset, model, xp)
-    colour_mapping = {'date': 'blue', 'text': 'red', 'num': 'black'}
+def imscatter(x, y, images, ax=None, zoom=1.0):
+    offset_images = [OffsetImage(image, zoom=zoom) for image in images]
+    x, y = np.atleast_1d(x, y)
+    artists = []
+    for x0, y0, offset_image in zip(x, y, offset_images):
+        ab = AnnotationBbox(offset_image, (x0, y0), xycoords='data', frameon=False)
+        artists.append(ax.add_artist(ab))
+    ax.update_datalim(np.column_stack([x, y]))
+    ax.autoscale()
+    return artists
 
-    image_path = get_sample_data('ada.png')
-    img = mpimg.imread(image_path)
+
+def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp):
+    # TODO: massive code duplications
+    plot_mapping = {
+        'date': {
+            'colour': 'blue',
+            'string': 'Date'
+        },
+        'text': {
+            'colour': 'red',
+            'string': 'Word'
+        },
+        'num':  {
+            'colour': 'black',
+            'string': 'Number'
+        },
+    }
+
+    x, y = get_pca(dataset, model, xp)
+    plt.clf()
+    image_dataset = np.transpose(np.asarray(dataset), (0, 2, 3, 1))
+
     fig, ax = plt.subplots()
-    imscatter(x, y, img, zoom=0.001, ax=ax)
-    ax.scatter(x, y, c=[colour_mapping[label] for label in labels])
-    plt.savefig('result/' + filename)
+    for item in plot_mapping.values():
+        colour = item['colour']
+        new_x = []
+        new_y = []
+        new_dataset = []
+        for idx, (label, image) in enumerate(zip(labels, image_dataset)):
+            if plot_mapping[label]['colour'] == colour:
+                new_x.append(x[idx])
+                new_y.append(y[idx])
+                cropped_image = remove_black_rect(image)
+                new_dataset.append(cropped_image)
+        if len(new_x) > 0 and len(new_y) > 0:
+            imscatter(new_x, new_y, new_dataset, zoom=0.15, ax=ax)
+            ax.scatter(new_x, new_y, c=colour)
+
+    plt.savefig('result/' + filename, dpi=600)
 
 
 class ClusterPlotter(training.Extension):
@@ -288,7 +314,7 @@ def main():
             backend.get_device(gpu).use()
             base_model.to_gpu()
         draw_embeddings_cluster('cluster_final.png', base_model, test_labels, test_triplet, xp)
-        # draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp)
+        draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp)
 
     print("Done")
 
