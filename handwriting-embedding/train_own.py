@@ -11,7 +11,7 @@ from chainer import Chain, training, report, cuda, backend, serializers, optimiz
 from chainer import functions as F
 from chainer.links.model.vision.resnet import _global_average_pooling_2d
 from chainer.training import extensions
-from cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images, draw_embeddings_cluster
+from cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
 from resnet import ResNet
 from triplet_iterator import TripletIterator
 
@@ -186,8 +186,8 @@ def main():
             base_model.to_gpu()
         draw_embeddings_cluster_with_images('cluster_final.png', base_model, test_labels, test_triplet, xp,
                                             draw_images=False)
-        draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp,
-                                            draw_images=True)
+        # draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp,
+        #                                     draw_images=True)
 
     print("Done")
 
