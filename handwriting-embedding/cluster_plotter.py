@@ -57,31 +57,15 @@ def imscatter(x, y, images, ax=None, zoom=1.0):
 
 
 def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp, draw_images):
-    # TODO: refactor as in clustering
-    plot_mapping = {
-        'date': {
-            'colour': 'blue',
-            'string': 'Date'
-        },
-        'text': {
-            'colour': 'red',
-            'string': 'Word'
-        },
-        'num':  {
-            'colour': 'black',
-            'string': 'Number'
-        },
-    }
-
     x, y = get_pca(dataset, model, xp)
     plt.clf()
 
     fig, ax = plt.subplots()
-    for item in plot_mapping.values():
-        colour = item['colour']
+    label_set = set(labels)
+    for item in label_set:
         indices = []
         for idx, label in enumerate(labels):
-            if plot_mapping[label]['colour'] == colour:
+            if item == label:
                 indices.append(idx)
         if len(indices) > 0:
             coords = np.asarray([[x[idx], y[idx]] for idx in indices])
@@ -91,9 +75,9 @@ def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp, dr
                 cropped_images = [remove_black_rect(image_dataset[idx]) for idx in indices]
                 imscatter(coords[:, 0], coords[:, 1], cropped_images, zoom=0.15, ax=ax)
 
-            ax.scatter(coords[:, 0], coords[:, 1], c=colour, label=item['string'])
+            ax.scatter(coords[:, 0], coords[:, 1], label=item)
 
-    ax.legend()
+    ax.legend(fontsize='xx-small')
     plt.savefig('result/' + filename, dpi=600)
 
 
