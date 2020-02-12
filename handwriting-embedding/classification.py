@@ -41,22 +41,6 @@ def draw_embeddings_cluster(filename, embeddings, labels, centroids):
     plt.savefig('result/' + filename, dpi=600)
 
 
-def classify_embeddings(embeddings, test_labels, test_embeddings, actual_labels=None):
-    num_centroids = len(set(test_labels))
-    centroid, labels = kmeans2(embeddings, num_centroids, minit='points')
-
-    # labeling the centroids with knn on test embeddings
-    knn = KNeighborsClassifier(n_neighbors=5)
-    knn.fit(test_embeddings, test_labels)
-    predicted_centroid_labels = knn.predict(centroid)
-
-    if actual_labels is not None:
-        translated_labels = translate_labels(actual_labels, labels, predicted_centroid_labels)
-        draw_embeddings_cluster('comp_num_vs_text.png', embeddings, translated_labels, centroid)
-
-    return [predicted_centroid_labels[label] for label in labels]
-
-
 def translate_labels(actual_labels, kmeans_labels, predicted_centroid_labels):
     num_centroids = len(set(kmeans_labels))
     # Iterate over all the kmeans labels and see if the labels match for the assigned centroid
@@ -74,6 +58,22 @@ def translate_labels(actual_labels, kmeans_labels, predicted_centroid_labels):
     return translated_labels
 
 
+def classify_embeddings(embeddings, support_labels, support_embeddings, actual_labels=None):
+    num_centroids = len(set(support_labels))
+    centroid, labels = kmeans2(embeddings, num_centroids, minit='points')
+
+    # labeling the centroids with knn on test embeddings
+    knn = KNeighborsClassifier(n_neighbors=5)
+    knn.fit(support_embeddings, support_labels)
+    predicted_centroid_labels = knn.predict(centroid)
+
+    if actual_labels is not None:
+        translated_labels = translate_labels(actual_labels, labels, predicted_centroid_labels)
+        draw_embeddings_cluster('comp_num_vs_text.png', embeddings, translated_labels, centroid)
+
+    return [predicted_centroid_labels[label] for label in labels]
+
+
 if __name__ == '__main__':
     saved_embeddings = np.load('embeddings.npy')
     with open('labels.pickle', 'rb') as f:
@@ -86,14 +86,14 @@ if __name__ == '__main__':
     # saved_labels.append('blah')
 
     indices = [0, 1, 2, 3, 4, 5, 6, 8, 11, 14]
-    test_labels = np.take(saved_labels, indices)
-    test_embeddings = np.take(saved_embeddings, indices, axis=0)
+    support_labels = np.take(saved_labels, indices)
+    support_embeddings = np.take(saved_embeddings, indices, axis=0)
 
     # arguable if test dataset can be aprt of the embeddings or not
     saved_labels = np.delete(saved_labels, indices, axis=0)
     saved_embeddings = np.delete(saved_embeddings, indices, axis=0)
 
-    predicted_labels = classify_embeddings(saved_embeddings, test_labels, test_embeddings, saved_labels)
+    predicted_labels = classify_embeddings(saved_embeddings, support_labels, support_embeddings, saved_labels)
 
     accuracy = accuracy_score(saved_labels, predicted_labels)
     precision, recall, f_score, support = precision_recall_fscore_support(saved_labels, predicted_labels)
