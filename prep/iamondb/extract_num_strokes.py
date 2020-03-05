@@ -1,4 +1,7 @@
 import json
+import math
+from copy import copy
+
 import os
 import xml.etree.ElementTree as ET
 
@@ -73,7 +76,7 @@ class Application(tk.Frame):
 
         for stroke in strokes:
             for i in range(stroke[0], stroke[1] - 1):
-                img_canvas.line((self.x[i], self.y[i], self.x[i + 1], self.y[i + 1]))
+                img_canvas.line((self.x[i], self.y[i], self.x[i + 1], self.y[i + 1]))  # TODO: stroke size?
 
         return img
 
@@ -85,18 +88,11 @@ class Application(tk.Frame):
         padding = 10
         new_x -= min(new_x) - padding
         new_y -= min(new_y) - padding
-        width = int(math.ceil(max(new_x))) + padding
-        height = int(math.ceil(max(new_y))) + padding
+        self.width = int(math.ceil(max(new_x))) + padding
+        self.height = int(math.ceil(max(new_y))) + padding
 
-        img = Image.new("L", (width, height), color=255)
-
-        img_canvas = ImageDraw.Draw(img)
-
-        for stroke in strokes:
-            for i in range(stroke[0], stroke[1] - 1):
-                img_canvas.line((self.x[i], self.y[i], self.x[i + 1], self.y[i + 1]))
-
-        return img
+        # Don't know why this works without setting self.x to new_x and self.y to new_y
+        return self.create_image_from_strokes(strokes)
 
     def draw_selected_strokes(self, strokes):
         self.tk_img = ImageTk.PhotoImage(self.create_image_from_strokes(strokes))
@@ -161,36 +157,68 @@ def process_file(in_filename, orig_text, extracted_num):
     app.mainloop()
 
 
+def get_ascii_file_list(root_dir):
+    pass
+
+
 def main():
-    # TODO: somehow decide what to do if multiple txt files in one dir
-    in_txt_filename = "h06-235z.txt"
-    lines_with_info = extract_relevant_lines(in_txt_filename)
+    ascii_root_dir = "../../../rnnlib/examples/online_prediction/ascii"
+    strokes_root_dir = "../../../rnnlib/examples/online_prediction/lineStrokes"
 
-    # TODO
-    # if len(lines_with_info) < 1:
-    #     continue
+    # for dir_path, dir_name, filenames in os.walk(ascii_root_dir):
+    #     pass
+    # for f in tmp:
+    #     name = os.path.dirname(f)
+    #     r = re.compile(name + ".*")
+    #     tempy = copy(tmp)
+    #     tempy.remove(f)
+    #     new_list = list(filter(r.match, tempy))
+    #     if new_list:
+    #         print(new_list)
 
-    in_txt_root = os.path.splitext(os.path.basename(in_txt_filename))[0]
-    dataset_description = []
-    for line in lines_with_info:
-        filename = in_txt_root + "-" + line[0] + ".xml"  # TODO maybe add dir in front
-        orig_text = line[1]
-        extracted_num = line[2]
-        process_file(filename, orig_text, extracted_num)
+    ascii_file_list = [os.path.join(dp, f) for dp, dn, fn in os.walk(ascii_root_dir) for f in fn]
+    ascii_file_list = ["h06/h06-235/h06-235z.txt"]
+    for txt_filename in ascii_file_list:
+        full_txt_filename = os.path.join(ascii_root_dir, txt_filename)
+        lines_with_info = extract_relevant_lines(full_txt_filename)
 
-        out_filename = "datasets/" + extracted_num + "_" + in_txt_root + ".png"
-        with open("../" + out_filename, "wb") as out_file:
-            global processed_image
-            processed_image.save(out_file)
+        if len(lines_with_info) < 1:
+            continue
 
-        dataset_description.append({
-            "string": extracted_num,
-            "type": "num",
-            "path": out_filename
-        })
+        in_filename_wo_ext = os.path.splitext(txt_filename)[0]
+        dataset_description = []
+        for line in lines_with_info:
+            try:
+                xml_filename = os.path.join(strokes_root_dir, in_filename_wo_ext + "-" + line[0] + ".xml")
+                raise ValueError
 
-    with open("../dataset_descriptions/iamondb_num.json", "w") as out_json:
-        json.dump(dataset_description, out_json, indent=4)
+                if not os.path.exists(xml_filename):
+                    print(xml_filename)
+                    continue
+
+                orig_text = line[1]
+                extracted_num = line[2]
+                process_file(xml_filename, orig_text, extracted_num)
+
+                out_filename = "datasets/" + extracted_num + "_" + os.path.basename(in_filename_wo_ext) + ".png"
+                with open("../" + out_filename, "wb") as out_file:
+                    global processed_image
+                    processed_image.save(out_file)  # TODO: write out strokes in addition/instead of images
+
+                dataset_description.append({
+                    "string": extracted_num,
+                    "type": "num",
+                    "path": out_filename
+                })
+            except Exception as err:
+                print(xml_filename, err)
+                with open("../dataset_descriptions/iamondb_num.json.part", "w") as out_json:
+                    json.dump(dataset_description, out_json, indent=4)
+
+        with open("../dataset_descriptions/iamondb_num.json", "w") as out_json:
+            json.dump(dataset_description, out_json, indent=4)
+
+        # TODO: fallback if I fuck up correctly classifying shit <-- this
 
 
 if __name__ == '__main__':
