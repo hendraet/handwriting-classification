@@ -1,6 +1,7 @@
 import configparser
 import itertools
 import json
+import os
 
 import matplotlib
 import numpy as np
@@ -110,14 +111,18 @@ def generate_triplet(dataset, classes):
     iters = [iter(anchors), iter(positives), iter(negatives)]
     merged = list(next(it) for it in itertools.cycle(iters))  # Works until python 3.6
 
-    return zip(*merged)
+    triplet, labels = zip(*merged)
+    return np.asarray(triplet), np.asarray(labels)
 
 
 def main():
     ###################### CONFIG ############################
 
-    retrain = False
-    model_name = 'iamdb_nums_vs_txt'
+    retrain = True
+    resnet_size = 18
+    model_dir = 'models'
+    model_name = 'iamdb_res' + str(resnet_size) + '_nums_vs_txt'
+    base_model = PooledResNet(resnet_size)
     plot_loss = True
 
     json_files = ['datasets/iamdb_nums_aug.json', 'datasets/iamdb_words_aug.json']
@@ -160,7 +165,6 @@ def main():
                                     batch_size=batch_size,
                                     xp=xp)
 
-        base_model = PooledResNet(18)
         model = Classifier(base_model)
 
         optimizer = optimizers.Adam(alpha=lr)
@@ -176,18 +180,17 @@ def main():
 
         trainer.run()
 
-        serializers.save_npz(model_name + '.npz', base_model)
+        serializers.save_npz(os.path.join(model_dir, model_name + '.npz'), base_model)
     else:
-        base_model = PooledResNet(18)
-        serializers.load_npz(model_name + '.npz', base_model)
+        serializers.load_npz(os.path.join(model_dir, model_name + '.npz'), base_model)
 
         if int(gpu) >= 0:
             backend.get_device(gpu).use()
             base_model.to_gpu()
         draw_embeddings_cluster_with_images('cluster_final.png', base_model, test_labels, test_triplet, xp,
                                             draw_images=False)
-        # draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp,
-        #                                     draw_images=True)
+        draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp,
+                                            draw_images=True)
 
     print("Done")
 
