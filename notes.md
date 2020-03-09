@@ -53,15 +53,6 @@ Related Work anschauen
 - Extraction script ist fast fertig, müssen noch safetys eingebaut werden (Fehler in log wegschreiben)
 - dieses File mal aufräumen
 
-- hat jmd schon mal netzwerk impl
-- ansonsten selber impl
-- anschauen wie viel Zahlen in orig Datensatz
-
-- Punkte, Zahlen Unterstriche in Synthese-Netzwerk
-- für Training Sätze in einzelne Wörter zerhacken
-- "Zahlwörter sollten" aber schon so 19.12.2020 sein (eng zusammengeschrieben!)
-- Preproc kann sein, dass es keine kompletten Datumsangaben rausgibt sondern nur Zahlen/einzelne Blöcke, ganze Datumsangaben wären nett
-
 ## Datensatzgenerierung
 - [X] Fontsize (oder image size) dynamisch anpassen
 - [X] Daten, Währung und Shit random generieren
@@ -83,12 +74,17 @@ Related Work anschauen
   - [X] doch piecewise (mit mode edge)
   - [X] shearing bisschen erhöhen
   - [X] auch words brightness technisch anpassen
+- [X] offline Handwriting von rrnlib anschauen
 
-- [] Fix cropping/spacing so that words completely fit in image
-- [] "Verhandschriftlichung" der Daten (mal nach Offline handwriting, iam hat auch online)
-- [] mal schauen, wie man noch anders Handwriting generieren kann, wenn online nicht funktioniert
-- [] offline Handwriting von rrnlib anschauen
-- [] auch mal online handwriting von anderen Sprachen anschauen
+- [?] Fix cropping/spacing so that words completely fit in image
+- [?] "Verhandschriftlichung" der Daten (mal nach Offline handwriting, iam hat auch online)
+- [?] mal schauen, wie man noch anders Handwriting generieren kann, wenn online nicht funktioniert
+- [?] auch mal online handwriting von anderen Sprachen anschauen
+
+- [] Punkte, Zahlen und Unterstriche für Synthese-Netzwerk extrahieren
+- [] für Training Sätze in einzelne Wörter zerhacken
+- [] "Zahlwörter" generieren, die das Format 19.12.2020 sein (eng zusammengeschrieben!) haben sollten
+  - Preproc kann sein, dass es keine kompletten Datumsangaben rausgibt sondern nur Zahlen/einzelne Blöcke, ganze Datumsangaben wären tortzdem nett
 
 ## Netzwerke
 - [X] Hannes Datensatz auf Chainer MNIST umbiegen und zum Laufen bekommen
