@@ -1,14 +1,12 @@
-import json
 import math
-from copy import copy
-
-import os
+import tkinter as tk
+import traceback
 import xml.etree.ElementTree as ET
 
 import numpy as np
+import os
 import re
 from PIL import Image, ImageDraw, ImageTk
-import tkinter as tk
 
 
 def extract_relevant_lines(filename):
@@ -58,9 +56,11 @@ class Application(tk.Frame):
         self.extr_num_label = tk.Label(master, text="Extracted number: " + extracted_num)
         self.extr_num_label.pack(side="top")
 
-        self.width = int(math.ceil(max(x)))
-        self.height = int(math.ceil(max(y)))
+        self.resize_factor = 0.2
+        self.width = int(math.ceil(max(x) * self.resize_factor))
+        self.height = int(math.ceil(max(y) * self.resize_factor))
         self.canvas = tk.Canvas(self, width=self.width, height=self.height)
+        # self.canvas = tk.Canvas(self)
         self.canvas.pack(side="bottom")
 
         self.focus_set()
@@ -71,12 +71,12 @@ class Application(tk.Frame):
 
     def create_image_from_strokes(self, strokes):
         img = Image.new("L", (self.width, self.height), color=255)
-
         img_canvas = ImageDraw.Draw(img)
 
         for stroke in strokes:
             for i in range(stroke[0], stroke[1] - 1):
-                img_canvas.line((self.x[i], self.y[i], self.x[i + 1], self.y[i + 1]))
+                img_canvas.line((self.x[i] * self.resize_factor, self.y[i] * self.resize_factor,
+                                 self.x[i + 1] * self.resize_factor, self.y[i + 1] * self.resize_factor))
 
         return img
 
@@ -91,13 +91,15 @@ class Application(tk.Frame):
         first = strokes[0][0]
         last = strokes[-1][1]
 
-        # TODO: normalisation? - sentence finden und vergleichen oder einfach alles selber machen
-        combined = np.stack([self.x, self.y], axis=1)[first:last]
+        combined = np.stack([self.x, -self.y], axis=1)[first:last]  # Inversion of y axis is necessary for actual synth
         combined_relative = combined[1:] - combined[:-1]
         combined_relative = np.insert(combined_relative, 0, [0., 0.], axis=0)
+        # normalisation to fit the numbers of the synth-lib
+        combined_relative = np.divide(combined_relative, 20, dtype=np.float32)
 
         stroke_ends = [stroke[1] - strokes[0][0] - 1 for stroke in strokes]
-        one_hot_stroke_ends = np.array([1 if i in stroke_ends else 0 for i in range(0, combined_relative.shape[0])])
+        one_hot_stroke_ends = np.array([1. if i in stroke_ends else 0. for i in range(0, combined_relative.shape[0])],
+                                       dtype=np.float32)
 
         formatted_strokes = np.stack([one_hot_stroke_ends, combined_relative[:, 0], combined_relative[:, 1]], axis=1)
         return formatted_strokes
@@ -149,10 +151,6 @@ def process_file(in_filename, orig_text, extracted_num):
     x = np.asarray(x)
     y = np.asarray(y)
 
-    # Just some more hacky resizing
-    x = x / 5
-    y = y / 5
-
     root = tk.Tk()
     app = Application(root, x, y, strokes, orig_text, extracted_num)
     app.mainloop()
@@ -169,7 +167,8 @@ def main():
     strokes_root_dir = "../../../rnnlib/examples/online_prediction/lineStrokes"
 
     ascii_file_list = [os.path.join(dp, f) for dp, dn, fn in os.walk(ascii_root_dir) for f in fn]
-    ascii_file_list = ["h06/h06-235/h06-235z.txt"]
+    # ascii_file_list = ["h06/h06-235/h06-235z.txt"]  # TODO: remove
+    ascii_file_list = ["d04/d04-284/d04-284z.txt"]  # TODO: remove
     for txt_filename in ascii_file_list:
         full_txt_filename = os.path.join(ascii_root_dir, txt_filename)
         lines_with_info = extract_relevant_lines(full_txt_filename)
@@ -196,17 +195,17 @@ def main():
                 stroke_list.append(formatted_strokes)
                 dataset_description.append(extracted_num)
             except Exception as err:
+                print(traceback.format_exc())
                 with open("extraction.log", "a") as log_file:
-                    log_file.write(xml_filename + " " + str(err) + "\n")
+                    log_file.write(xml_filename + " " + str(traceback.format_exc()) + "\n")
 
         write_results("../dataset_descriptions/iamondb_num.txt", "../datasets/iamondb_num.npy", dataset_description,
                       stroke_list)
 
         with open("extraction.log", "a") as log_file:
-            log_file.write("------------------------------------------------------")
+            log_file.write("------------------------------------------------------\n")
 
         # TODO: repeat option if I want to cut numbers like 1980 in 4?
-        # TODO: invert y
 
 
 if __name__ == '__main__':
