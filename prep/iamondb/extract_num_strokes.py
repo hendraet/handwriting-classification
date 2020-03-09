@@ -76,23 +76,9 @@ class Application(tk.Frame):
 
         for stroke in strokes:
             for i in range(stroke[0], stroke[1] - 1):
-                img_canvas.line((self.x[i], self.y[i], self.x[i + 1], self.y[i + 1]))  # TODO: stroke size?
+                img_canvas.line((self.x[i], self.y[i], self.x[i + 1], self.y[i + 1]))
 
         return img
-
-    def create_final_image(self, strokes):
-        first = strokes[0][0]
-        last = strokes[-1][1]
-        new_x = self.x[first:last]
-        new_y = self.y[first:last]
-        padding = 10
-        new_x -= min(new_x) - padding
-        new_y -= min(new_y) - padding
-        self.width = int(math.ceil(max(new_x))) + padding
-        self.height = int(math.ceil(max(new_y))) + padding
-
-        # Don't know why this works without setting self.x to new_x and self.y to new_y
-        return self.create_image_from_strokes(strokes)
 
     def draw_selected_strokes(self, strokes):
         self.tk_img = ImageTk.PhotoImage(self.create_image_from_strokes(strokes))
@@ -101,9 +87,24 @@ class Application(tk.Frame):
             self.canvas.delete("img")
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_img, tags="img")
 
+    def get_formatted_strokes(self, strokes):
+        first = strokes[0][0]
+        last = strokes[-1][1]
+
+        # TODO: normalisation? - sentence finden und vergleichen oder einfach alles selber machen
+        combined = np.stack([self.x, self.y], axis=1)[first:last]
+        combined_relative = combined[1:] - combined[:-1]
+        combined_relative = np.insert(combined_relative, 0, [0., 0.], axis=0)
+
+        stroke_ends = [stroke[1] - strokes[0][0] - 1 for stroke in strokes]
+        one_hot_stroke_ends = np.array([1 if i in stroke_ends else 0 for i in range(0, combined_relative.shape[0])])
+
+        formatted_strokes = np.stack([one_hot_stroke_ends, combined_relative[:, 0], combined_relative[:, 1]], axis=1)
+        return formatted_strokes
+
     def quit(self):
-        global processed_image
-        processed_image = self.create_final_image(self.strokes[self.current_start:self.current_end])
+        global formatted_strokes
+        formatted_strokes = self.get_formatted_strokes(self.strokes[self.current_start:self.current_end])
 
         self.master.destroy()
 
@@ -157,24 +158,15 @@ def process_file(in_filename, orig_text, extracted_num):
     app.mainloop()
 
 
-def get_ascii_file_list(root_dir):
-    pass
+def write_results(descr_filename, stroke_filename, dataset_description, stroke_list):
+    with open(descr_filename, "w") as out:
+        out.write("\n".join(dataset_description))
+    np.save(stroke_filename, np.asarray(stroke_list), allow_pickle=True)
 
 
 def main():
     ascii_root_dir = "../../../rnnlib/examples/online_prediction/ascii"
     strokes_root_dir = "../../../rnnlib/examples/online_prediction/lineStrokes"
-
-    # for dir_path, dir_name, filenames in os.walk(ascii_root_dir):
-    #     pass
-    # for f in tmp:
-    #     name = os.path.dirname(f)
-    #     r = re.compile(name + ".*")
-    #     tempy = copy(tmp)
-    #     tempy.remove(f)
-    #     new_list = list(filter(r.match, tempy))
-    #     if new_list:
-    #         print(new_list)
 
     ascii_file_list = [os.path.join(dp, f) for dp, dn, fn in os.walk(ascii_root_dir) for f in fn]
     ascii_file_list = ["h06/h06-235/h06-235z.txt"]
@@ -187,40 +179,36 @@ def main():
 
         in_filename_wo_ext = os.path.splitext(txt_filename)[0]
         dataset_description = []
+        stroke_list = []
         for line in lines_with_info:
+            xml_filename = os.path.join(strokes_root_dir, in_filename_wo_ext + "-" + line[0] + ".xml")
+
+            if not os.path.exists(xml_filename):
+                print(xml_filename)
+                continue
+
             try:
-                xml_filename = os.path.join(strokes_root_dir, in_filename_wo_ext + "-" + line[0] + ".xml")
-                raise ValueError
-
-                if not os.path.exists(xml_filename):
-                    print(xml_filename)
-                    continue
-
                 orig_text = line[1]
                 extracted_num = line[2]
                 process_file(xml_filename, orig_text, extracted_num)
 
-                out_filename = "datasets/" + extracted_num + "_" + os.path.basename(in_filename_wo_ext) + ".png"
-                with open("../" + out_filename, "wb") as out_file:
-                    global processed_image
-                    processed_image.save(out_file)  # TODO: write out strokes in addition/instead of images
-
-                dataset_description.append({
-                    "string": extracted_num,
-                    "type": "num",
-                    "path": out_filename
-                })
+                global formatted_strokes
+                stroke_list.append(formatted_strokes)
+                dataset_description.append(extracted_num)
             except Exception as err:
-                print(xml_filename, err)
-                with open("../dataset_descriptions/iamondb_num.json.part", "w") as out_json:
-                    json.dump(dataset_description, out_json, indent=4)
+                with open("extraction.log", "a") as log_file:
+                    log_file.write(xml_filename + " " + str(err) + "\n")
 
-        with open("../dataset_descriptions/iamondb_num.json", "w") as out_json:
-            json.dump(dataset_description, out_json, indent=4)
+        write_results("../dataset_descriptions/iamondb_num.txt", "../datasets/iamondb_num.npy", dataset_description,
+                      stroke_list)
 
-        # TODO: fallback if I fuck up correctly classifying shit <-- this
+        with open("extraction.log", "a") as log_file:
+            log_file.write("------------------------------------------------------")
+
+        # TODO: repeat option if I want to cut numbers like 1980 in 4?
+        # TODO: invert y
 
 
 if __name__ == '__main__':
-    global processed_image
+    global formatted_strokes
     main()
