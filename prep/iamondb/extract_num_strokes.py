@@ -1,4 +1,5 @@
 import math
+import sys
 import tkinter as tk
 import traceback
 import xml.etree.ElementTree as ET
@@ -7,32 +8,6 @@ import numpy as np
 import os
 import re
 from PIL import Image, ImageDraw, ImageTk
-
-
-def extract_relevant_lines(filename):
-    with open(filename, "r") as f:
-        lines = f.readlines()
-
-    first_line = -1
-    for i, line in enumerate(lines):
-        if "CSR" in line:
-            first_line = i + 2  # 2 lines after CSR, one blank in between
-            break
-
-    if first_line == -1:
-        raise Exception("Seems like the file sucks.")
-
-    relevant_lines = []
-    for ln, line in enumerate(lines[first_line:]):
-        matches = re.findall("(\\d+)", line)
-
-        if len(matches) > 1:
-            for match in matches:
-                relevant_lines.append((str(ln + 1).zfill(2), line, match))
-        elif len(matches) == 1:
-            relevant_lines.append((str(ln + 1).zfill(2), line, matches[0]))
-
-    return relevant_lines
 
 
 class Application(tk.Frame):
@@ -70,13 +45,14 @@ class Application(tk.Frame):
         self.draw_selected_strokes(strokes)
 
     def create_image_from_strokes(self, strokes):
-        img = Image.new("L", (self.width, self.height), color=255)
+        img = Image.new("RGB", (self.width, self.height), color=(255, 255, 255))
         img_canvas = ImageDraw.Draw(img)
 
         for stroke in strokes:
             for i in range(stroke[0], stroke[1] - 1):
                 img_canvas.line((self.x[i] * self.resize_factor, self.y[i] * self.resize_factor,
-                                 self.x[i + 1] * self.resize_factor, self.y[i + 1] * self.resize_factor))
+                                 self.x[i + 1] * self.resize_factor, self.y[i + 1] * self.resize_factor),
+                                fill=(0,0,0), width=3)
 
         return img
 
@@ -111,6 +87,8 @@ class Application(tk.Frame):
         self.master.destroy()
 
     def change_strokes(self, event):
+        # TODO: repeat option if I want to cut numbers like 1980 in 4?
+        # TODO: Fallback for misclassification/remove from dataset
         if self.phase == 0:
             if event.keysym == "Right":
                 self.current_start = min(self.current_start + 1, self.current_end)
@@ -127,6 +105,33 @@ class Application(tk.Frame):
                 self.quit()
                 return
         self.draw_selected_strokes(self.strokes[self.current_start:self.current_end])
+
+
+def extract_relevant_lines(filename):
+    with open(filename, "r") as f:
+        lines = f.readlines()
+
+    first_line = -1
+    for i, line in enumerate(lines):
+        if "CSR" in line:
+            first_line = i + 2  # 2 lines after CSR, one blank in between
+            break
+
+    if first_line == -1:
+        raise Exception("Seems like the file sucks.")
+
+    relevant_lines = []
+    for ln, line in enumerate(lines[first_line:]):
+        # TODO: don't split 1000s off
+        matches = re.findall("(\\d+)", line)
+
+        if len(matches) > 1:
+            for match in matches:
+                relevant_lines.append((str(ln + 1).zfill(2), line, match))
+        elif len(matches) == 1:
+            relevant_lines.append((str(ln + 1).zfill(2), line, matches[0]))
+
+    return relevant_lines
 
 
 def process_file(in_filename, orig_text, extracted_num):
@@ -158,17 +163,20 @@ def process_file(in_filename, orig_text, extracted_num):
 
 def write_results(descr_filename, stroke_filename, dataset_description, stroke_list):
     with open(descr_filename, "w") as out:
-        out.write("\n".join(dataset_description))
+        out.write("\n".join(dataset_description) + "\n")
     np.save(stroke_filename, np.asarray(stroke_list), allow_pickle=True)
 
 
 def main():
-    ascii_root_dir = "../../../rnnlib/examples/online_prediction/ascii"
-    strokes_root_dir = "../../../rnnlib/examples/online_prediction/lineStrokes"
+    ascii_root_dir = "../../../rnnlib/examples/online_prediction/ascii/"
+    strokes_root_dir = "../../../rnnlib/examples/online_prediction/lineStrokes/"
 
-    ascii_file_list = [os.path.join(dp, f) for dp, dn, fn in os.walk(ascii_root_dir) for f in fn]
-    # ascii_file_list = ["h06/h06-235/h06-235z.txt"]  # TODO: remove
-    ascii_file_list = ["d04/d04-284/d04-284z.txt"]  # TODO: remove
+    # we need dir + file name from the root dir to create xml filenames later
+    ascii_file_list = [re.sub(ascii_root_dir, '', os.path.join(dp, f))
+                       for dp, dn, fn in os.walk(ascii_root_dir) for f in fn]
+
+    dataset_description = []
+    stroke_list = []
     for txt_filename in ascii_file_list:
         full_txt_filename = os.path.join(ascii_root_dir, txt_filename)
         lines_with_info = extract_relevant_lines(full_txt_filename)
@@ -177,16 +185,17 @@ def main():
             continue
 
         in_filename_wo_ext = os.path.splitext(txt_filename)[0]
-        dataset_description = []
-        stroke_list = []
-        for line in lines_with_info:
-            xml_filename = os.path.join(strokes_root_dir, in_filename_wo_ext + "-" + line[0] + ".xml")
+        try:
+            for line in lines_with_info:
+                xml_filename = os.path.join(strokes_root_dir, in_filename_wo_ext + "-" + line[0] + ".xml")
 
-            if not os.path.exists(xml_filename):
-                print(xml_filename)
-                continue
+                if not os.path.exists(xml_filename):
+                    msg = "File skipped: " + xml_filename
+                    print(msg)
+                    with open("extraction.log", "a") as log_file:
+                        log_file.write(msg + "\n")
+                    continue
 
-            try:
                 orig_text = line[1]
                 extracted_num = line[2]
                 process_file(xml_filename, orig_text, extracted_num)
@@ -194,18 +203,20 @@ def main():
                 global formatted_strokes
                 stroke_list.append(formatted_strokes)
                 dataset_description.append(extracted_num)
-            except Exception as err:
-                print(traceback.format_exc())
-                with open("extraction.log", "a") as log_file:
-                    log_file.write(xml_filename + " " + str(traceback.format_exc()) + "\n")
+        except KeyboardInterrupt:
+            with open("extraction.log", "a") as log_file:
+                log_file.write("Interrupted at: " + txt_filename + "\n")
+            break
+        except Exception as err:
+            print(traceback.format_exc())
+            with open("extraction.log", "a") as log_file:
+                log_file.write(txt_filename + " " + str(traceback.format_exc()) + "\n")
 
-        write_results("../dataset_descriptions/iamondb_num.txt", "../datasets/iamondb_num.npy", dataset_description,
-                      stroke_list)
+    write_results("../dataset_descriptions/iamondb_num.txt", "../datasets/iamondb_num.npy", dataset_description,
+                  stroke_list)
 
-        with open("extraction.log", "a") as log_file:
-            log_file.write("------------------------------------------------------\n")
-
-        # TODO: repeat option if I want to cut numbers like 1980 in 4?
+    with open("extraction.log", "a") as log_file:
+        log_file.write("------------------------------------------------------\n")
 
 
 if __name__ == '__main__':
