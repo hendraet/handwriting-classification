@@ -89,6 +89,7 @@ class Application(tk.Frame):
     def change_strokes(self, event):
         # TODO: repeat option if I want to cut numbers like 1980 in 4?
         # TODO: Fallback for misclassification/remove from dataset
+        print(event.keysym)
         if self.phase == 0:
             if event.keysym == "Right":
                 self.current_start = min(self.current_start + 1, self.current_end)
@@ -122,7 +123,6 @@ def extract_relevant_lines(filename):
 
     relevant_lines = []
     for ln, line in enumerate(lines[first_line:]):
-        # TODO: don't split 1000s off
         matches = re.findall("(\\d+)", line)
 
         if len(matches) > 1:
@@ -161,7 +161,12 @@ def process_file(in_filename, orig_text, extracted_num):
     app.mainloop()
 
 
-def write_results(descr_filename, stroke_filename, dataset_description, stroke_list):
+def write_results(descr_filename, stroke_filename, extracted_infos):
+    extracted_infos = np.asarray(extracted_infos)
+    dataset_description = extracted_infos[:, 1]
+    dataset_description = [",".join(el) for el in dataset_description]
+    stroke_list = extracted_infos[:, 0]
+
     with open(descr_filename, "w") as out:
         out.write("\n".join(dataset_description) + "\n")
     np.save(stroke_filename, np.asarray(stroke_list), allow_pickle=True)
@@ -174,23 +179,25 @@ def main():
     # we need dir + file name from the root dir to create xml filenames later
     ascii_file_list = [re.sub(ascii_root_dir, '', os.path.join(dp, f))
                        for dp, dn, fn in os.walk(ascii_root_dir) for f in fn]
+    # ascii_file_list = ascii_file_list[:1]
 
-    dataset_description = []
-    stroke_list = []
-    for txt_filename in ascii_file_list:
+    extracted_infos = []
+    for i, txt_filename in enumerate(ascii_file_list):
         full_txt_filename = os.path.join(ascii_root_dir, txt_filename)
         lines_with_info = extract_relevant_lines(full_txt_filename)
 
         if len(lines_with_info) < 1:
             continue
+        print("File", str(i) + "/" + str(len(ascii_file_list)))
 
         in_filename_wo_ext = os.path.splitext(txt_filename)[0]
         try:
             for line in lines_with_info:
-                xml_filename = os.path.join(strokes_root_dir, in_filename_wo_ext + "-" + line[0] + ".xml")
+                xml_filename = in_filename_wo_ext + "-" + line[0] + ".xml"
+                full_xml_filename = os.path.join(strokes_root_dir, xml_filename)
 
-                if not os.path.exists(xml_filename):
-                    msg = "File skipped: " + xml_filename
+                if not os.path.exists(full_xml_filename):
+                    msg = "File skipped: " + full_xml_filename
                     print(msg)
                     with open("extraction.log", "a") as log_file:
                         log_file.write(msg + "\n")
@@ -198,11 +205,11 @@ def main():
 
                 orig_text = line[1]
                 extracted_num = line[2]
-                process_file(xml_filename, orig_text, extracted_num)
+                process_file(full_xml_filename, orig_text, extracted_num)
 
                 global formatted_strokes
-                stroke_list.append(formatted_strokes)
-                dataset_description.append(extracted_num)
+                extracted_infos.append([formatted_strokes, [extracted_num, xml_filename, txt_filename]])
+
         except KeyboardInterrupt:
             with open("extraction.log", "a") as log_file:
                 log_file.write("Interrupted at: " + txt_filename + "\n")
@@ -212,8 +219,7 @@ def main():
             with open("extraction.log", "a") as log_file:
                 log_file.write(txt_filename + " " + str(traceback.format_exc()) + "\n")
 
-    write_results("../dataset_descriptions/iamondb_num.txt", "../datasets/iamondb_num.npy", dataset_description,
-                  stroke_list)
+    write_results("../dataset_descriptions/iamondb_num.txt", "../datasets/iamondb_num.npy", extracted_infos)
 
     with open("extraction.log", "a") as log_file:
         log_file.write("------------------------------------------------------\n")
