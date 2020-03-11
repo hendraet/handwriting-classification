@@ -17,25 +17,21 @@ class Application(tk.Frame):
         self.pack(side="top")
         x -= min(x)
         y -= min(y)
+
         self.x = x
         self.y = y
         self.strokes = strokes
-        self.current_start = 0
-        self.current_end = len(strokes)
-        self.phase = 0
-        self.tk_img = None
         self.extracted_num = extracted_num
+        self.resize_factor = 0.2
+
+        self.initialise()
 
         self.text_label = tk.Label(master, text="Original text: " + orig_text)
         self.text_label.pack(side="top")
         self.extr_num_label = tk.Label(master, text="Extracted number: " + extracted_num)
         self.extr_num_label.pack(side="top")
 
-        self.resize_factor = 0.2
-        self.width = int(math.ceil(max(x) * self.resize_factor))
-        self.height = int(math.ceil(max(y) * self.resize_factor))
         self.canvas = tk.Canvas(self, width=self.width, height=self.height)
-        # self.canvas = tk.Canvas(self)
         self.canvas.pack(side="bottom")
 
         self.focus_set()
@@ -43,6 +39,14 @@ class Application(tk.Frame):
 
         # Draw initial image
         self.draw_selected_strokes(strokes)
+
+    def initialise(self):
+        self.current_start = 0
+        self.current_end = len(self.strokes)
+        self.phase = 0
+        self.width = int(math.ceil(max(self.x) * self.resize_factor))
+        self.height = int(math.ceil(max(self.y) * self.resize_factor))
+        self.tk_img = None
 
     def create_image_from_strokes(self, strokes):
         img = Image.new("RGB", (self.width, self.height), color=(255, 255, 255))
@@ -52,8 +56,7 @@ class Application(tk.Frame):
             for i in range(stroke[0], stroke[1] - 1):
                 img_canvas.line((self.x[i] * self.resize_factor, self.y[i] * self.resize_factor,
                                  self.x[i + 1] * self.resize_factor, self.y[i + 1] * self.resize_factor),
-                                fill=(0,0,0), width=3)
-
+                                fill=(0, 0, 0), width=3)
         return img
 
     def draw_selected_strokes(self, strokes):
@@ -87,9 +90,18 @@ class Application(tk.Frame):
         self.master.destroy()
 
     def change_strokes(self, event):
-        # TODO: repeat option if I want to cut numbers like 1980 in 4?
-        # TODO: Fallback for misclassification/remove from dataset
-        print(event.keysym)
+        # correct errors
+        if event.keysym == "BackSpace":
+            self.initialise()
+
+        # remove sample from dataset
+        if event.keysym == "r":
+            global remove_sample
+            remove_sample = True
+            self.quit()
+            return
+
+        # change strokes
         if self.phase == 0:
             if event.keysym == "Right":
                 self.current_start = min(self.current_start + 1, self.current_end)
@@ -97,7 +109,7 @@ class Application(tk.Frame):
                 self.current_start = max(self.current_start - 1, 0)
             if event.keysym == "Return":
                 self.phase = 1
-        else:
+        elif self.phase == 1:
             if event.keysym == "Right":
                 self.current_end = min(self.current_end + 1, len(self.strokes))
             if event.keysym == "Left":
@@ -105,6 +117,7 @@ class Application(tk.Frame):
             if event.keysym == "Return":
                 self.quit()
                 return
+
         self.draw_selected_strokes(self.strokes[self.current_start:self.current_end])
 
 
@@ -123,7 +136,9 @@ def extract_relevant_lines(filename):
 
     relevant_lines = []
     for ln, line in enumerate(lines[first_line:]):
-        matches = re.findall("(\\d+)", line)
+        mutliple_digits = re.findall("(\\d{2,})", line)
+        single_digits = re.findall("(\\d)", line)
+        matches = mutliple_digits + single_digits
 
         if len(matches) > 1:
             for match in matches:
@@ -160,6 +175,14 @@ def process_file(in_filename, orig_text, extracted_num):
     app = Application(root, x, y, strokes, orig_text, extracted_num)
     app.mainloop()
 
+    global remove_sample
+    if remove_sample:
+        remove_sample = False
+        return None
+
+    global formatted_strokes
+    return formatted_strokes
+
 
 def write_results(descr_filename, stroke_filename, extracted_infos):
     extracted_infos = np.asarray(extracted_infos)
@@ -179,7 +202,7 @@ def main():
     # we need dir + file name from the root dir to create xml filenames later
     ascii_file_list = [re.sub(ascii_root_dir, '', os.path.join(dp, f))
                        for dp, dn, fn in os.walk(ascii_root_dir) for f in fn]
-    # ascii_file_list = ascii_file_list[:1]
+    ascii_file_list = ascii_file_list[2:]
 
     extracted_infos = []
     for i, txt_filename in enumerate(ascii_file_list):
@@ -205,10 +228,10 @@ def main():
 
                 orig_text = line[1]
                 extracted_num = line[2]
-                process_file(full_xml_filename, orig_text, extracted_num)
+                resulting_strokes = process_file(full_xml_filename, orig_text, extracted_num)
 
-                global formatted_strokes
-                extracted_infos.append([formatted_strokes, [extracted_num, xml_filename, txt_filename]])
+                if resulting_strokes is not None:
+                    extracted_infos.append([resulting_strokes, [extracted_num, xml_filename, txt_filename]])
 
         except KeyboardInterrupt:
             with open("extraction.log", "a") as log_file:
@@ -227,4 +250,6 @@ def main():
 
 if __name__ == '__main__':
     global formatted_strokes
+    global remove_sample
+    remove_sample = False
     main()
