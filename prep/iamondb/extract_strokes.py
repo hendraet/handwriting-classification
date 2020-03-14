@@ -141,9 +141,6 @@ def extract_relevant_lines(filename, regexes):
         for regex in regexes:
             match = re.findall("(" + regex + ")", line)
             all_matches.extend(match)
-        # mutliple_digits = re.findall("(\\d{2,})", line)
-        # single_digits = re.findall("(\\d)", line)
-        # all_matches = mutliple_digits + single_digits
 
         if len(all_matches) > 1:
             for match in all_matches:
@@ -257,7 +254,7 @@ def main():
                 log_file.write(txt_filename + " " + str(traceback.format_exc()) + "\n")
 
     result_filename = "iamondb_" + args.file_suffix
-    write_results(result_filename + ".txt", result_filename + ".npy", extracted_infos)
+    write_results(result_filename + ".csv", result_filename + ".npy", extracted_infos)
 
     with open("extraction.log", "a") as log_file:
         log_file.write("------------------------------------------------------\n")
