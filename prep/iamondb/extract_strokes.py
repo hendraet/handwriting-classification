@@ -1,3 +1,4 @@
+import argparse
 import math
 import sys
 import tkinter as tk
@@ -11,7 +12,7 @@ from PIL import Image, ImageDraw, ImageTk
 
 
 class Application(tk.Frame):
-    def __init__(self, master, x, y, strokes, orig_text, extracted_num):
+    def __init__(self, master, x, y, strokes, orig_text, extracted_string):
         super().__init__(master)
         self.master = master
         self.pack(side="top")
@@ -21,14 +22,14 @@ class Application(tk.Frame):
         self.x = x
         self.y = y
         self.strokes = strokes
-        self.extracted_num = extracted_num
+        self.extracted_num = extracted_string
         self.resize_factor = 0.2
 
         self.initialise()
 
         self.text_label = tk.Label(master, text="Original text: " + orig_text)
         self.text_label.pack(side="top")
-        self.extr_num_label = tk.Label(master, text="Extracted number: " + extracted_num)
+        self.extr_num_label = tk.Label(master, text="Extracted string: " + extracted_string)
         self.extr_num_label.pack(side="top")
 
         self.canvas = tk.Canvas(self, width=self.width, height=self.height)
@@ -121,7 +122,7 @@ class Application(tk.Frame):
         self.draw_selected_strokes(self.strokes[self.current_start:self.current_end])
 
 
-def extract_relevant_lines(filename):
+def extract_relevant_lines(filename, regexes):
     with open(filename, "r") as f:
         lines = f.readlines()
 
@@ -136,20 +137,24 @@ def extract_relevant_lines(filename):
 
     relevant_lines = []
     for ln, line in enumerate(lines[first_line:]):
-        mutliple_digits = re.findall("(\\d{2,})", line)
-        single_digits = re.findall("(\\d)", line)
-        matches = mutliple_digits + single_digits
+        all_matches = []
+        for regex in regexes:
+            match = re.findall("(" + regex + ")", line)
+            all_matches.extend(match)
+        # mutliple_digits = re.findall("(\\d{2,})", line)
+        # single_digits = re.findall("(\\d)", line)
+        # all_matches = mutliple_digits + single_digits
 
-        if len(matches) > 1:
-            for match in matches:
+        if len(all_matches) > 1:
+            for match in all_matches:
                 relevant_lines.append((str(ln + 1).zfill(2), line, match))
-        elif len(matches) == 1:
-            relevant_lines.append((str(ln + 1).zfill(2), line, matches[0]))
+        elif len(all_matches) == 1:
+            relevant_lines.append((str(ln + 1).zfill(2), line, all_matches[0]))
 
     return relevant_lines
 
 
-def process_file(in_filename, orig_text, extracted_num):
+def process_file(in_filename, orig_text, extracted_string):
     tree = ET.parse(in_filename)
     root = tree.getroot()
 
@@ -172,7 +177,7 @@ def process_file(in_filename, orig_text, extracted_num):
     y = np.asarray(y)
 
     root = tk.Tk()
-    app = Application(root, x, y, strokes, orig_text, extracted_num)
+    app = Application(root, x, y, strokes, orig_text, extracted_string)
     app.mainloop()
 
     global remove_sample
@@ -196,8 +201,17 @@ def write_results(descr_filename, stroke_filename, extracted_infos):
 
 
 def main():
-    ascii_root_dir = "../../../rnnlib/examples/online_prediction/ascii/"
-    strokes_root_dir = "../../../rnnlib/examples/online_prediction/lineStrokes/"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("regex", nargs='+', help="The regexes for finding the strings to extract.")
+    parser.add_argument("file_suffix", help="A suffix, e.g. 'num', that should be added to the filename of the results.")
+    parser.add_argument("-ar", "--ascii-root-dir", default="ascii/",
+                        help="The root directory where all the OCRs/CSRs for the strokes lie.")
+    parser.add_argument("-sr", "--strokes-root-dir", default="lineStrokes/",
+                        help="The root directory where all the stroke representations lie.")
+    args = parser.parse_args()
+
+    ascii_root_dir = args.ascii_root_dir
+    strokes_root_dir = args.strokes_root_dir
 
     # we need dir + file name from the root dir to create xml filenames later
     ascii_file_list = [re.sub(ascii_root_dir, '', os.path.join(dp, f))
@@ -207,7 +221,7 @@ def main():
     extracted_infos = []
     for i, txt_filename in enumerate(ascii_file_list):
         full_txt_filename = os.path.join(ascii_root_dir, txt_filename)
-        lines_with_info = extract_relevant_lines(full_txt_filename)
+        lines_with_info = extract_relevant_lines(full_txt_filename, args.regex)
 
         if len(lines_with_info) < 1:
             continue
@@ -227,11 +241,11 @@ def main():
                     continue
 
                 orig_text = line[1]
-                extracted_num = line[2]
-                resulting_strokes = process_file(full_xml_filename, orig_text, extracted_num)
+                extracted_string = line[2]
+                resulting_strokes = process_file(full_xml_filename, orig_text, extracted_string)
 
                 if resulting_strokes is not None:
-                    extracted_infos.append([resulting_strokes, [extracted_num, xml_filename, txt_filename]])
+                    extracted_infos.append([resulting_strokes, [extracted_string, xml_filename, txt_filename]])
 
         except KeyboardInterrupt:
             with open("extraction.log", "a") as log_file:
@@ -242,7 +256,8 @@ def main():
             with open("extraction.log", "a") as log_file:
                 log_file.write(txt_filename + " " + str(traceback.format_exc()) + "\n")
 
-    write_results("../dataset_descriptions/iamondb_num.txt", "../datasets/iamondb_num.npy", extracted_infos)
+    result_filename = "iamondb_" + args.file_suffix
+    write_results(result_filename + ".txt", result_filename + ".npy", extracted_infos)
 
     with open("extraction.log", "a") as log_file:
         log_file.write("------------------------------------------------------\n")
@@ -253,3 +268,5 @@ if __name__ == '__main__':
     global remove_sample
     remove_sample = False
     main()
+
+
