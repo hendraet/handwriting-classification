@@ -30,7 +30,7 @@ def generate_date():
     # DD. Month
     # DD. Mon
     date_formats = ['%d.%m.%y', '%d.%m.%Y', '%m/%d/%y', '%m/%d/%Y', '%d. %B %Y', '%d. %b %Y', '%B %y', '%d. %B',
-                    '%d. %b']
+                    '%d. %b', '%d-%m-%y']
 
     start = datetime.strptime('01.01.1000', '%d.%m.%Y')
     end = datetime.strptime('01.01.2020', '%d.%m.%Y')
@@ -71,7 +71,6 @@ def generate_image(txt):
 
 
 def main():
-    assert(False, 'Dates DD Month YYYY have to be fixed')
     parser = argparse.ArgumentParser(description='Generating images with random text')
     parser.add_argument('-d', '--dir', type=str, default='datasets/',
                         help='path to directory where images should be stored')
@@ -139,4 +138,5 @@ def main():
 
 
 if __name__ == '__main__':
+    assert False, 'Dates DD Month YYYY have to be fixed'
     main()

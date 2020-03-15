@@ -73,7 +73,7 @@ class Application(tk.Frame):
 
         combined = np.stack([self.x, -self.y], axis=1)[first:last]  # Inversion of y axis is necessary for actual synth
         combined_relative = combined[1:] - combined[:-1]
-        combined_relative = np.insert(combined_relative, 0, [0., 0.], axis=0)
+        combined_relative = np.insert(combined_relative, 0, [0., 0.], axis=0)  # Step above removes on element
         # normalisation to fit the numbers of the synth-lib
         combined_relative = np.divide(combined_relative, 20, dtype=np.float32)
 
