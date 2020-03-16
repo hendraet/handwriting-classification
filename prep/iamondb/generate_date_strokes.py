@@ -74,7 +74,6 @@ def create_image_from_strokes(orig_x, orig_y, stroke_ends):
                          x[i + 1] * resize_factor, y[i + 1] * resize_factor),
                         fill=(0, 0, 0), width=3)
     img.show()
-    pass
 
 
 def concatenate_strokes(datasets, sequence_idx, show_image=False):
@@ -118,7 +117,7 @@ def get_indices_for_string(num_labels, string):
 def write_results(samples, labels):
     np.save("dates.npy", np.asarray(samples))
     with open("dates.csv", "w") as label_file:
-        label_file.write("\n".join(labels))
+        label_file.write("\n".join(labels) + "\n")
 
 
 def convert_from_absoulte_to_relative(x, y):
@@ -139,6 +138,13 @@ def main():
     parser.add_argument("--num", type=int, default="10")
     parser.add_argument("--show-image", action="store_true")
     args = parser.parse_args()
+
+    # tmp = np.load("../../../Handwriting-synthesis/data/strokes.npy", allow_pickle=True, encoding="bytes")
+    # tmpy = np.load("../datasets/iamondb_num.npy", allow_pickle=True, encoding="bytes")
+    # tmp = normalise_dataset(tmp)
+    # tmpy = normalise_dataset(tmpy)
+    # create_image_from_strokes(tmp[0][:,1],tmp[0][:,2],tmp[0][:,0],)
+    # create_image_from_strokes(tmpy[0][:,1],tmpy[0][:,2],tmpy[0][:,0],)
 
     num_dataset, num_labels = get_datastet_and_labels(args, args.num_dataset)
     dot_dataset, dot_labels = get_datastet_and_labels(args, args.dot_dataset)
