@@ -11,7 +11,7 @@ from os.path import join
 def resize_img(img, target_dimensions):
     ratio = target_dimensions[1] / img.size[1]
     new_dimensions = tuple([int(dim * ratio) for dim in img.size])
-    resized_img = img.resize(new_dimensions)  # TODO
+    resized_img = img.resize(new_dimensions)  # TODO images can overflow on x-axis if the resized version is still wider than 350px
     padded_img = Image.new('L', target_dimensions)
     padded_img.paste(resized_img, ((target_dimensions[0] - new_dimensions[0]) // 2,
                                    (target_dimensions[1] - new_dimensions[1]) // 2))
@@ -21,7 +21,7 @@ def resize_img(img, target_dimensions):
 def main():
     outdir = 'datasets/'
     indir = 'datasets/'
-    json_path = 'datasets/dates.json'
+    json_path = 'dataset_descriptions/iamondb_generated_dates.json'
     target_dimensions = (350, 60)
 
     with open(json_path, 'r') as j_file:

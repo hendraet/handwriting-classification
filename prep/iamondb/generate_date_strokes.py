@@ -4,10 +4,12 @@ from datetime import datetime
 import math
 
 import copy
+import json
 import os
 import random
 
 import numpy as np
+import statistics
 
 from PIL import ImageDraw, Image
 
@@ -55,34 +57,55 @@ def generate_date():
     return rand_date.strftime(random.choice(date_formats))
 
 
-def create_image_from_strokes(orig_x, orig_y, stroke_ends):
-    img = Image.new("RGB", (1000, 200), color=(255, 255, 255))  # TODO width height
-    img_canvas = ImageDraw.Draw(img)
-    resize_factor = 3
+def create_image_from_strokes(orig_x, orig_y, stroke_ends, show_image):
     x = copy.deepcopy(orig_x)
     y = copy.deepcopy(orig_y)
 
-    y *= -1  # y-axis is inverted
+    padding = 10
+    resize_factor = 3
 
-    x += 10
-    y += 40
+    y *= -1  # y-axis is inverted
+    y -= y.min()
+
+    x *= resize_factor
+    y *= resize_factor
+
+    x += padding
+    y += padding
+
+    width = math.ceil(x.max() + padding)
+    height = math.ceil(y.max() + padding)
+
+    img = Image.new("RGB", (width, height), color=(255, 255, 255))  # TODO width height
+    img_canvas = ImageDraw.Draw(img)
 
     for i, point in enumerate(stroke_ends[:-1]):
         if stroke_ends[i] == 1:  # TODO: check if correct
             continue
-        img_canvas.line((x[i] * resize_factor, y[i] * resize_factor,
-                         x[i + 1] * resize_factor, y[i + 1] * resize_factor),
-                        fill=(0, 0, 0), width=3)
-    img.show()
+        img_canvas.line((x[i], y[i], x[i + 1], y[i + 1]), fill=(0, 0, 0), width=3)
+
+    if show_image:
+        img.show()
+
+    return img
 
 
-def concatenate_strokes(datasets, sequence_idx, show_image=False):
+def concatenate_strokes(string, datasets, sequence_idx, resize=True):
     # Copy is necessary because otherwise the padding is messed up if the same stroke_set is used twice
     stroke_sets = np.asarray([copy.deepcopy(datasets[i]) for i in sequence_idx])
 
+    heights = [(stroke_set[:, 2].max() - stroke_set[:, 2].min()) for stroke_set in stroke_sets]
+    # Exclude punctuation form median calculation to avoid unnecessary distortion
+    median_height = statistics.mean([height for i, height in enumerate(heights) if string[i].isdigit()])
+
     absolute_strokes = []
-    for stroke_set in stroke_sets:
+    for i, stroke_set in enumerate(stroke_sets):
         stroke_coords = stroke_set[:, 1:]
+
+        if string[i].isdigit() and resize:
+            distortion_factor = random.uniform(-0.10, 0.10)
+            resize_factor = median_height / heights[i] + distortion_factor
+            stroke_coords *= resize_factor
 
         # shift current stroke set, so that it is displayed on the right of the previous stroke set
         if absolute_strokes:
@@ -96,9 +119,6 @@ def concatenate_strokes(datasets, sequence_idx, show_image=False):
 
     x = absolute_strokes[:, 0]
     y = absolute_strokes[:, 1]
-
-    if show_image:
-        create_image_from_strokes(x, y, stroke_ends)
 
     return x, y, stroke_ends
 
@@ -114,8 +134,9 @@ def get_indices_for_string(num_labels, string):
     return indices
 
 
-def write_results(samples, labels):
+def write_synth_results(samples, labels, synth_ready):
     np.save("dates.npy", np.asarray(samples))
+
     with open("dates.csv", "w") as label_file:
         label_file.write("\n".join(labels) + "\n")
 
@@ -137,14 +158,9 @@ def main():
     parser.add_argument("--dash-dataset", default="iamondb_dash")
     parser.add_argument("--num", type=int, default="10")
     parser.add_argument("--show-image", action="store_true")
+    parser.add_argument("--synth-ready", action="store_true",
+                        help="Csv and npy files will be generated JSON and images otherwise")
     args = parser.parse_args()
-
-    # tmp = np.load("../../../Handwriting-synthesis/data/strokes.npy", allow_pickle=True, encoding="bytes")
-    # tmpy = np.load("../datasets/iamondb_num.npy", allow_pickle=True, encoding="bytes")
-    # tmp = normalise_dataset(tmp)
-    # tmpy = normalise_dataset(tmpy)
-    # create_image_from_strokes(tmp[0][:,1],tmp[0][:,2],tmp[0][:,0],)
-    # create_image_from_strokes(tmpy[0][:,1],tmpy[0][:,2],tmpy[0][:,0],)
 
     num_dataset, num_labels = get_datastet_and_labels(args, args.num_dataset)
     dot_dataset, dot_labels = get_datastet_and_labels(args, args.dot_dataset)
@@ -159,20 +175,39 @@ def main():
     labels = num_labels + dot_labels + dash_labels
 
     samples = []
-    new_labels = []
+    dataset_info = []
     for i in range(0, args.num):
-        date = generate_date()
+        string = generate_date()
 
-        sequence_idx = get_indices_for_string(labels, date)
+        sequence_idx = get_indices_for_string(labels, string)
 
-        x, y, stroke_ends = concatenate_strokes(datasets, sequence_idx, show_image=args.show_image)
+        x, y, stroke_ends = concatenate_strokes(string, datasets, sequence_idx, resize=True)
+        img = create_image_from_strokes(x, y, stroke_ends, args.show_image)
         x, y = convert_from_absoulte_to_relative(x, y)
 
-        new_stroke_set = np.stack((stroke_ends, x, y), axis=1)
-        samples.append(new_stroke_set)
-        new_labels.append(date)
+        if args.synth_ready:
+            new_stroke_set = np.stack((stroke_ends, x, y), axis=1)
+            samples.append(new_stroke_set)
+            dataset_info.append(string)
+        else:
+            filename = string + "_" + "_".join([str(i) for i in (sequence_idx)]) + ".png"
+            out_path = os.path.join(args.dataset_dir, filename)
+            with open(out_path, "wb") as out_file:
+                img.save(out_file)
 
-    write_results(samples, new_labels)
+            info = {
+                "string": string,
+                "type": "date",
+                "path": out_path.replace("../", ""),
+            }
+            dataset_info.append(info)
+
+
+    if args.synth_ready:
+        write_synth_results(samples, dataset_info, args.synth_ready)
+    else:
+        with open(os.path.join(args.description_dir, "iamondb_generated_dates.json"), "w") as out_json:
+            json.dump(dataset_info, out_json, indent=4)
 
 
 if __name__ == '__main__':

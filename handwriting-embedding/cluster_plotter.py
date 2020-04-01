@@ -79,6 +79,7 @@ def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp, dr
 
     ax.legend(fontsize='xx-small')
     plt.savefig('result/' + filename, dpi=600)
+    plt.close(fig)
 
 
 class ClusterPlotter(training.Extension):

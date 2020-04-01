@@ -18,7 +18,6 @@ from triplet_iterator import TripletIterator
 
 matplotlib.use('Agg')
 
-
 class Classifier(Chain):
     def __init__(self, predictor):
         super(Classifier, self).__init__(predictor=predictor)
@@ -68,15 +67,19 @@ def image_to_array(path):
 def generate_datasets(json_paths):
     train = []
     test = []
+    datasets = []
 
     for dataset_path in json_paths:
         with open(dataset_path, 'r') as f:
             json_file = json.load(f)
             dataset = [(image_to_array(sample['path']), sample['type']) for sample in json_file]
-            threshold = int(len(dataset) * 0.9)
-            # Datasets should be shuffled if generated differently
-            train.extend(dataset[:threshold])
-            test.extend(dataset[threshold:])
+            datasets.append(dataset)
+
+    min_length = min([len(ds) for ds in datasets])
+    threshold = int(min_length * 0.9)
+    for ds in datasets:
+        train.extend(ds[:threshold])
+        test.extend(ds[threshold:min_length])
 
     random.shuffle(train)
     random.shuffle(test)
@@ -108,8 +111,10 @@ def generate_triplet(dataset, classes):
     positives = generate_triplet_part(dataset, False, classes)
     negatives = generate_triplet_part(dataset, True, classes)
 
-    iters = [iter(anchors), iter(positives), iter(negatives)]
-    merged = list(next(it) for it in itertools.cycle(iters))  # Works until python 3.6
+    datasets = [anchors, positives, negatives]
+    merged = [None] * 3 * len(anchors)
+    for i in range(0, 3):
+        merged[i::3] = datasets[i]
 
     triplet, labels = zip(*merged)
     return np.asarray(triplet), np.asarray(labels)
@@ -121,12 +126,16 @@ def main():
     retrain = True
     resnet_size = 18
     model_dir = 'models'
-    model_name = 'iamdb_res' + str(resnet_size) + '_nums_vs_txt'
+    if not os.path.exists(model_dir):
+        os.mkdir(model_dir)
+    model_name = 'iamondb_res' + str(resnet_size) + '_nums_vs_dates_aug'
     base_model = PooledResNet(resnet_size)
     plot_loss = True
 
-    json_files = ['datasets/iamdb_nums_aug.json', 'datasets/iamdb_words_aug.json']
-    classes = ['num', 'text']
+    json_files = ['datasets/iamdb_nums_aug.json', 'datasets/iamondb_generated_dates_aug.json']
+    classes = ['num', 'date']  # Choose from num, date and text
+    # json_files = ['datasets/iamdb_nums_aug.json', 'datasets/iamdb_words_small.json']
+    # classes = ['num', 'text']  # Choose from num, date and text
 
     config = configparser.ConfigParser()
     config.read('own.conf')
@@ -138,6 +147,9 @@ def main():
     gpu = config['TRAINING']['gpu']
 
     xp = cuda.cupy if int(gpu) >= 0 else np
+
+    import chainer
+    tmp = chainer.backends.cuda.available
 
     print("RETRAIN:", str(retrain), "MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size), "EPOCHS:", str(epochs))
 

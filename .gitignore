@@ -120,7 +120,9 @@ etc/
 share/
 handwriting-embedding/*.npz
 handwriting-embedding/result
+handwriting-embedding/own.conf
 .idea
 cluster_images
 washingtondb-v1.0
 orig_datasets
+

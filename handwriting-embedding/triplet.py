@@ -24,8 +24,8 @@ class Updater(StandardUpdater):
 
     def update_network(self):
         batches = self._iterators['main'].next()
-        in_vars = (variable.Variable(self.converter(batch, self.device))
-                   for batch in batches)
+
+        in_vars = (variable.Variable(batch) for batch in batches)
 
         optimizer = self._optimizers['main']
         loss_func = self.loss_func or optimizer.target
@@ -55,10 +55,7 @@ class Evaluator(Evaluator):
         for batches in it:
             observation = {}
             with reporter_module.report_scope(observation), chainer.no_backprop_mode():
-                in_vars = [variable.Variable(
-                    # self.converter(batch, self.device), volatile='on')
-                    self.converter(batch, self.device))
-                    for batch in batches]
+                in_vars = [variable.Variable(batch) for batch in batches]
                 eval_func(*in_vars)
 
             summary.add(observation)
