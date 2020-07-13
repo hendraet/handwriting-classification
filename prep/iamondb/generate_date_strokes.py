@@ -32,7 +32,7 @@ def normalise_dataset(dataset):
 
 
 def get_datastet_and_labels(args, dataset_prefix):
-    dataset_path = os.path.join(args.dataset_dir, dataset_prefix + ".npy")
+    dataset_path = os.path.join(args.dataset_dir, "npys", dataset_prefix + ".npy")
     dataset = np.load(dataset_path, allow_pickle=True)
     dataset = normalise_dataset(dataset)
 
@@ -151,6 +151,7 @@ def convert_from_absoulte_to_relative(x, y):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("json_name")
     parser.add_argument("--dataset-dir", default="../datasets")
     parser.add_argument("--description-dir", default="../dataset_descriptions")
     parser.add_argument("--num-dataset", default="iamondb_num")
@@ -206,7 +207,7 @@ def main():
     if args.synth_ready:
         write_synth_results(samples, dataset_info, args.synth_ready)
     else:
-        with open(os.path.join(args.description_dir, "iamondb_generated_dates.json"), "w") as out_json:
+        with open(os.path.join(args.description_dir, args.json_name + ".json"), "w") as out_json:
             json.dump(dataset_info, out_json, indent=4)
 
 
