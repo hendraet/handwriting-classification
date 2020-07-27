@@ -158,6 +158,7 @@ def main():
     parser.add_argument("--dot-dataset", default="iamondb_dot")
     parser.add_argument("--dash-dataset", default="iamondb_dash")
     parser.add_argument("--num", type=int, default="10")
+    parser.add_argument("--dates", action="store_true")
     parser.add_argument("--show-image", action="store_true")
     parser.add_argument("--synth-ready", action="store_true",
                         help="Csv and npy files will be generated JSON and images otherwise")
@@ -178,7 +179,15 @@ def main():
     samples = []
     dataset_info = []
     for i in range(0, args.num):
-        string = generate_date()
+        if args.dates:
+            string_type = "date"
+            string = generate_date()
+        else:
+            string_type = "num"
+            string = str(random.randint(0, 100000))
+            if random.choice([True, False]):
+                # Add 0 padding for some nums without increasing max num length
+                string = string[:-1].zfill(len(string))
 
         sequence_idx = get_indices_for_string(labels, string)
 
@@ -192,17 +201,16 @@ def main():
             dataset_info.append(string)
         else:
             filename = string + "_" + "_".join([str(i) for i in (sequence_idx)]) + ".png"
-            out_path = os.path.join(args.dataset_dir, filename)
+            out_path = os.path.join(args.dataset_dir, filename)  # TODO
             with open(out_path, "wb") as out_file:
                 img.save(out_file)
 
             info = {
                 "string": string,
-                "type": "date",
-                "path": out_path.replace("../", ""),
+                "type": string_type,
+                "path": os.path.split(out_path)[1]
             }
             dataset_info.append(info)
-
 
     if args.synth_ready:
         write_synth_results(samples, dataset_info, args.synth_ready)

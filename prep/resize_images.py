@@ -22,10 +22,12 @@ def resize_img(img, target_dimensions, padding_color=0):
 
 
 def main():
-    outdir = 'datasets/'
+    outdir = 'datasets/tars'
     indir = 'datasets/'
-    json_path = 'dataset_descriptions/iamondb_generated_dates.json'
-    target_dimensions = (350, 60)
+    json_path = 'dataset_descriptions/iamondb_generated_nums_20k.json'
+    # json_path = 'datasets/tars/iamondb_generated_dates_50k.json'
+    target_dimensions = (216, 64)
+    padding_colour = 255
 
     with open(json_path, 'r') as j_file:
         num_json = json.load(j_file)
@@ -34,7 +36,7 @@ def main():
     for img_path in images:
         img_path = os.path.basename(img_path)
         img = Image.open(join(indir, img_path))
-        padded_img = resize_img(img, target_dimensions)
+        padded_img = resize_img(img, target_dimensions, padding_colour)
 
         # padded_img.show()
         new_img_path = join(outdir, img_path)
