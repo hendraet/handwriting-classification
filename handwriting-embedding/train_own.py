@@ -1,3 +1,4 @@
+import argparse
 import configparser
 import itertools
 import json
@@ -64,17 +65,18 @@ def image_to_array(path):
     return np.transpose(img_array, (2, 0, 1))
 
 
-def generate_datasets(json_paths):
+def generate_datasets(json_paths, dataset_dir):
+    datasets = []
+    for dataset_description_path in json_paths:
+        with open(os.path.join(dataset_dir, dataset_description_path), 'r') as f:
+            json_file = json.load(f)
+        dataset = [(image_to_array(os.path.join(dataset_dir, sample['path'])), sample['type']) for sample in json_file]  # TODO refactor into dict
+        datasets.append(dataset)
+
+    classes = set([sample[1] for ds in datasets for sample in ds])
+
     train = []
     test = []
-    datasets = []
-
-    for dataset_path in json_paths:
-        with open(dataset_path, 'r') as f:
-            json_file = json.load(f)
-            dataset = [(image_to_array(sample['path']), sample['type']) for sample in json_file]
-            datasets.append(dataset)
-
     min_length = min([len(ds) for ds in datasets])
     threshold = int(min_length * 0.9)
     for ds in datasets:
@@ -84,10 +86,10 @@ def generate_datasets(json_paths):
     random.shuffle(train)
     random.shuffle(test)
 
-    return train, test
+    return train, test, classes
 
 
-def generate_triplet_part(dataset, negative, classes):
+def generate_triplet_part(dataset, is_negative, classes):
     triplet_part = []
     num_classes = len(classes)
     for cl in classes:
@@ -95,7 +97,7 @@ def generate_triplet_part(dataset, negative, classes):
             while True:
                 sample_idx = random.randint(0, len(dataset) - 1)
                 sample = dataset[sample_idx]
-                if negative:
+                if is_negative:
                     if sample[1] != cl:
                         triplet_part.append(sample)
                         break
@@ -121,42 +123,51 @@ def generate_triplet(dataset, classes):
 
 
 def main():
-    ###################### CONFIG ############################
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", type=str, help="Config file for Training params such as epochs, batch size, lr, etc.")
+    parser.add_argument("model_suffix", type=str, help="Suffix that should be added to the end of the model filename")
+    parser.add_argument("dataset_dir", type=str,
+                        help="Directory where the images and the dataset description is stored")
+    parser.add_argument("json_files", nargs="+", type=str,
+                        help="JSON files that conatin the string-path-type mapping for each sample")
+    parser.add_argument("-r", "--retrain", action="store_true", help="Model will be trained from scratch")
+    parser.add_argument("-md", "--model-dir", type=str, default="models",
+                        help="Dir where models will be saved/loaded from")
+    parser.add_argument("-rs", "--resnet-size", type=int, default="18", help="Size of the used ResNet model")
+    args = parser.parse_args()
 
-    retrain = True
-    resnet_size = 18
-    model_dir = 'models'
+    # TODO: image size
+    # TODO: inversion of image colors?
+
+    ###################### CONFIG ############################
+    retrain = args.retrain
+    resnet_size = args.resnet_size
+    model_dir = args.model_dir
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
-    model_name = 'iamondb_res' + str(resnet_size) + '_nums_vs_dates_aug'
+    model_name = 'iamondb_res' + str(resnet_size) + "_" + args.model_suffix
     base_model = PooledResNet(resnet_size)
     plot_loss = True
 
-    json_files = ['datasets/iamdb_nums_aug.json', 'datasets/iamondb_generated_dates_aug.json']
-    classes = ['num', 'date']  # Choose from num, date and text
-    # json_files = ['datasets/iamdb_nums_aug.json', 'datasets/iamdb_words_small.json']
-    # classes = ['num', 'text']  # Choose from num, date and text
+    json_files = args.json_files
 
     config = configparser.ConfigParser()
-    config.read('own.conf')
+    config.read(args.config)
 
     batch_size = int(config['TRAINING']['batch_size'])
     epochs = int(config['TRAINING']['epochs'])
     lr = float(config['TRAINING']['lr'])
-    lr_interval = int(config['TRAINING']['lr_interval'])
+    # lr_interval = int(config['TRAINING']['lr_interval'])
     gpu = config['TRAINING']['gpu']
 
     xp = cuda.cupy if int(gpu) >= 0 else np
-
-    import chainer
-    tmp = chainer.backends.cuda.available
 
     print("RETRAIN:", str(retrain), "MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size), "EPOCHS:", str(epochs))
 
     #################### DATASETS ###########################
 
-    train, test = generate_datasets(json_files)
-    print("Datasets loaded.")
+    train, test, classes = generate_datasets(json_files, args.dataset_dir)
+    print("Datasets loaded. train samples: {}, test samples: {}".format(len(train), len(test)))
 
     train_triplet, train_labels = generate_triplet(train, classes)
     assert not [i for (i, label) in enumerate(train_labels[0::3]) if label == train_labels[i * 3 + 2]]

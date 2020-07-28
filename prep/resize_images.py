@@ -11,13 +11,16 @@ from os.path import join
 def resize_img(img, target_dimensions, padding_color=0):
     ratio = target_dimensions[1] / img.size[1]
     new_dimensions = tuple([int(dim * ratio) for dim in img.size])
+
     if new_dimensions[0] > target_dimensions[0]:
         ratio = target_dimensions[0] / img.size[0]
         new_dimensions = tuple([int(dim * ratio) for dim in img.size])
     resized_img = img.resize(new_dimensions)
+
     padded_img = Image.new('L', target_dimensions, color=padding_color)
     # center image vertically but pad only to the right
     padded_img.paste(resized_img, (0, (target_dimensions[1] - new_dimensions[1]) // 2))
+
     return padded_img
 
 

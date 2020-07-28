@@ -33,8 +33,8 @@ def get_pca(dataset, model, xp):
             embedding_batch = model(batch)
             embedding_flat = cuda.to_cpu(embedding_batch.array)
             embeddings.extend(embedding_flat)
-            print('.', end='')
-        print()
+        #     print('.', end='')
+        # print()
 
     X = np.array(embeddings)
     pca = PCA(n_components=2)
@@ -91,5 +91,5 @@ class ClusterPlotter(training.Extension):
 
     def __call__(self, trainer):
         epoch = trainer.updater.epoch
-        draw_embeddings_cluster_with_images('cluster_epoch_{}.png'.format(epoch), self._model, self._labels,
+        draw_embeddings_cluster_with_images('cluster_epoch_{}.png'.format(str(epoch).zfill(3)), self._model, self._labels,
                                             self._dataset, self._xp, draw_images=False)
