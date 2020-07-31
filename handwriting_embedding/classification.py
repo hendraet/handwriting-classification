@@ -59,6 +59,7 @@ def translate_labels(actual_labels, kmeans_labels, predicted_centroid_labels):
 
 
 def classify_embeddings(embeddings, support_labels, support_embeddings, actual_labels=None):
+    # TODO: base num centroids on num classes for outlier detection
     num_centroids = len(set(support_labels))
     centroid, labels = kmeans2(embeddings, num_centroids, minit='points')
 
@@ -74,7 +75,8 @@ def classify_embeddings(embeddings, support_labels, support_embeddings, actual_l
     return [predicted_centroid_labels[label] for label in labels]
 
 
-if __name__ == '__main__':
+def main():
+    # TODO: make possible to only pass model and support images
     saved_embeddings = np.load('embeddings.npy')
     with open('labels.pickle', 'rb') as f:
         saved_labels = list(pickle.load(f))
@@ -89,11 +91,12 @@ if __name__ == '__main__':
     support_labels = np.take(saved_labels, indices)
     support_embeddings = np.take(saved_embeddings, indices, axis=0)
 
-    # arguable if test dataset can be aprt of the embeddings or not
+    # arguable if test dataset can be part of the embeddings or not
     saved_labels = np.delete(saved_labels, indices, axis=0)
     saved_embeddings = np.delete(saved_embeddings, indices, axis=0)
 
     predicted_labels = classify_embeddings(saved_embeddings, support_labels, support_embeddings, saved_labels)
+    # TODO: get all labels where predicted label differs from actual label and plot them
 
     accuracy = accuracy_score(saved_labels, predicted_labels)
     precision, recall, f_score, support = precision_recall_fscore_support(saved_labels, predicted_labels)
@@ -104,3 +107,7 @@ if __name__ == '__main__':
           f"Recall:    {recall}\n"
           f"F-score:   {f_score}\n"
           f"Support:   {support}")
+
+
+if __name__ == '__main__':
+    main()

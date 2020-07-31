@@ -1,11 +1,10 @@
-import pickle
-
-import chainer
 import matplotlib
 import numpy as np
-from chainer import cuda, training
+from chainer import training
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.decomposition import PCA
+
+from handwriting_embedding.eval_utils import get_embeddings
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -23,20 +22,8 @@ def remove_black_rect(img):
         return img
 
 
-def get_pca(dataset, model, xp):
-    with chainer.using_device(model.device):
-        embeddings = []
-        batch_size = 128  # TODO: remove magic number
-
-        for i in range(0, len(dataset), batch_size):
-            batch = xp.array(list(dataset[i:i + batch_size]))
-            embedding_batch = model(batch)
-            embedding_flat = cuda.to_cpu(embedding_batch.array)
-            embeddings.extend(embedding_flat)
-        #     print('.', end='')
-        # print()
-
-    X = np.array(embeddings)
+def get_pca(embeddings):
+    X = embeddings
     pca = PCA(n_components=2)
     fitted_data = pca.fit_transform(X)
     x = fitted_data[:, 0]
@@ -56,8 +43,8 @@ def imscatter(x, y, images, ax=None, zoom=1.0):
     return artists
 
 
-def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp, draw_images):
-    x, y = get_pca(dataset, model, xp)
+def draw_embeddings_cluster_with_images(filename, embeddings, labels, dataset, draw_images):
+    x, y = get_pca(embeddings)
     plt.clf()
 
     fig, ax = plt.subplots()
@@ -83,13 +70,15 @@ def draw_embeddings_cluster_with_images(filename, model, labels, dataset, xp, dr
 
 
 class ClusterPlotter(training.Extension):
-    def __init__(self, model, labels, dataset, xp):
+    def __init__(self, model, labels, dataset, batch_size, xp):
         self._model = model
         self._labels = labels
         self._dataset = dataset
+        self._batchsize = batch_size
         self._xp = xp
 
     def __call__(self, trainer):
         epoch = trainer.updater.epoch
-        draw_embeddings_cluster_with_images('cluster_epoch_{}.png'.format(str(epoch).zfill(3)), self._model, self._labels,
-                                            self._dataset, self._xp, draw_images=False)
+        embeddings = get_embeddings(self._model, self._dataset, self._batchsize, self._xp)
+        draw_embeddings_cluster_with_images('cluster_epoch_{}.png'.format(str(epoch).zfill(3)), embeddings,
+                                            self._labels, self._dataset, draw_images=False)

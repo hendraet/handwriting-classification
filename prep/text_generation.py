@@ -48,7 +48,7 @@ def generate_text(word_list):
     return random.choice(word_list)
 
 
-def generate_image(txt):
+def generate_image(txt, add_additional_padding=False):
     fontsize = 70
     font_dir = '../google-fonts'
     font_name = random.choice(os.listdir(font_dir))
@@ -64,7 +64,11 @@ def generate_image(txt):
 
     d.text((0, 0), txt, fill=0, font=img_font)
 
-    padded_img = resize_img(img, target_dimensions, padding_color=255)
+    if add_additional_padding:
+        padding_right = max(0, int(random.gauss(0, 35)))
+        padded_img = resize_img(img, target_dimensions, padding_color=255, additional_padding=(0, 0, padding_right, 0))
+    else:
+        padded_img = resize_img(img, target_dimensions, padding_color=255)
 
     return padded_img, font_name, text_dimensions
 
@@ -144,6 +148,9 @@ def main():
     if save_image:
         with open(json_path, 'w+') as json_file:
             json.dump(img_list, json_file, indent=4)
+
+    # TODO: tar and move to desired dir/clean up
+    # move JSON to datasetdescr
 
 
 if __name__ == '__main__':

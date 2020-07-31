@@ -1,23 +1,28 @@
 import argparse
 import configparser
-import itertools
 import json
-import os
+from math import sqrt
 
+import cv2
 import matplotlib
 import numpy as np
+import os
 import random
-import triplet
 from PIL import Image
 from chainer import Chain, training, report, cuda, backend, serializers, optimizers
 from chainer import functions as F
 from chainer.links.model.vision.resnet import _global_average_pooling_2d
 from chainer.training import extensions
-from cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
-from resnet import ResNet
-from triplet_iterator import TripletIterator
+from tensorboardX import SummaryWriter
+
+from handwriting_embedding import triplet
+from handwriting_embedding.cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
+from handwriting_embedding.eval_utils import get_embeddings
+from handwriting_embedding.resnet import ResNet
+from handwriting_embedding.triplet_iterator import TripletIterator
 
 matplotlib.use('Agg')
+
 
 class Classifier(Chain):
     def __init__(self, predictor):
@@ -70,9 +75,10 @@ def generate_datasets(json_paths, dataset_dir):
     for dataset_description_path in json_paths:
         with open(os.path.join(dataset_dir, dataset_description_path), 'r') as f:
             json_file = json.load(f)
-        dataset = [(image_to_array(os.path.join(dataset_dir, sample['path'])), sample['type']) for sample in json_file]  # TODO refactor into dict
+        dataset = [(image_to_array(os.path.join(dataset_dir, sample['path'])), sample['type']) for sample in
+                   json_file]  # TODO refactor into dict
+        random.shuffle(dataset)
         datasets.append(dataset)
-
     classes = set([sample[1] for ds in datasets for sample in ds])
 
     train = []
@@ -134,9 +140,9 @@ def main():
     parser.add_argument("-md", "--model-dir", type=str, default="models",
                         help="Dir where models will be saved/loaded from")
     parser.add_argument("-rs", "--resnet-size", type=int, default="18", help="Size of the used ResNet model")
+    parser.add_argument("-ld", "--log-dir", type=str, help="name of tensorboard logdir")
     args = parser.parse_args()
 
-    # TODO: image size
     # TODO: inversion of image colors?
 
     ###################### CONFIG ############################
@@ -161,6 +167,11 @@ def main():
     gpu = config['TRAINING']['gpu']
 
     xp = cuda.cupy if int(gpu) >= 0 else np
+
+    if args.log_dir is not None:
+        writer = SummaryWriter(os.path.join("runs/", args.log_dir))
+    else:
+        writer = SummaryWriter()
 
     print("RETRAIN:", str(retrain), "MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size), "EPOCHS:", str(epochs))
 
@@ -199,7 +210,7 @@ def main():
         trainer = get_trainer(updater, evaluator, epochs)
         if plot_loss:
             trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss'], 'epoch', file_name='loss.png'))
-        trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, xp), trigger=(1, 'epoch'))
+        trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, batch_size, xp), trigger=(1, 'epoch'))
 
         trainer.run()
 
@@ -210,10 +221,34 @@ def main():
         if int(gpu) >= 0:
             backend.get_device(gpu).use()
             base_model.to_gpu()
-        draw_embeddings_cluster_with_images('cluster_final.png', base_model, test_labels, test_triplet, xp,
+
+        embeddings = get_embeddings(base_model, test_triplet, batch_size, xp)
+        draw_embeddings_cluster_with_images('cluster_final.png', embeddings, test_labels, test_triplet,
                                             draw_images=False)
-        draw_embeddings_cluster_with_images('cluster_final_with_images.png', base_model, test_labels, test_triplet, xp,
+        draw_embeddings_cluster_with_images('cluster_final_with_images.png', embeddings, test_labels, test_triplet,
                                             draw_images=True)
+
+        # Add embeddings to projector - TODO: refactor into method
+        height_pad = 0
+        width_pad = 0
+        if test_triplet.shape[2] > test_triplet.shape[3]:
+            width_pad = test_triplet.shape[2] - test_triplet.shape[3]
+        else:
+            height_pad = test_triplet.shape[3] - test_triplet.shape[2]
+
+        square_imgs = np.pad(test_triplet, ((0, 0), (0, 0), (0, height_pad), (0, width_pad)), mode="constant")
+
+        n = square_imgs.shape[0]
+        max_dim = int(8192 // sqrt(n))
+        resized_imgs = []
+        for img in square_imgs:
+            img = np.transpose(img, (2, 1, 0))
+            resized_img = cv2.resize(img, dsize=(max_dim, max_dim), interpolation=cv2.INTER_CUBIC)
+            resized_img = np.transpose(resized_img, (2, 1, 0))
+            resized_imgs.append(resized_img)
+        resized_imgs = np.asarray(resized_imgs)
+
+        writer.add_embedding(embeddings, metadata=test_labels, label_img=resized_imgs)
 
     print("Done")
 

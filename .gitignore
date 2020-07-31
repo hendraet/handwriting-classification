@@ -118,9 +118,9 @@ signature-embedding/
 text-generator/generated-images/*
 etc/
 share/
-handwriting-embedding/*.npz
-handwriting-embedding/result
-handwriting-embedding/own.conf
+handwriting_embedding/*.npz
+handwriting_embedding/result
+handwriting_embedding/own.conf
 .idea
 cluster_images
 washingtondb-v1.0

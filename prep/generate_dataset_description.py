@@ -2,7 +2,7 @@ import json
 
 import os
 
-dataset_dir = "/home/hendrik/pycharm_upload/handwriting-embedding/datasets"
+dataset_dir = "/home/hendrik/pycharm_upload/handwriting_embedding/datasets"
 description_filename = "ganwriting_generated_words_dates_20k"
 description_path = os.path.join(dataset_dir, description_filename + ".json")
 
