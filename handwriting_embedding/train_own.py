@@ -11,13 +11,15 @@ import random
 from PIL import Image
 from chainer import Chain, training, report, cuda, backend, serializers, optimizers
 from chainer import functions as F
+from chainer.datasets import get_mnist
 from chainer.links.model.vision.resnet import _global_average_pooling_2d
 from chainer.training import extensions
 from tensorboardX import SummaryWriter
 
 from handwriting_embedding import triplet
-from handwriting_embedding.cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
+from handwriting_embedding.extensions.cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
 from handwriting_embedding.eval_utils import get_embeddings
+from handwriting_embedding.extensions.visual_backprop import VisualBackprop
 from handwriting_embedding.resnet import ResNet
 from handwriting_embedding.triplet_iterator import TripletIterator
 
@@ -41,9 +43,12 @@ class PooledResNet(Chain):
 
         with self.init_scope():
             self.feature_extractor = ResNet(n_layers)
+        self.visual_backprop_anchors = []
 
     def __call__(self, x):
+        self.visual_backprop_anchors.clear()
         h = self.feature_extractor(x)
+        self.visual_backprop_anchors.append(h)
         h = _global_average_pooling_2d(h)
         return h
 
@@ -211,6 +216,8 @@ def main():
         if plot_loss:
             trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss'], 'epoch', file_name='loss.png'))
         trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, batch_size, xp), trigger=(1, 'epoch'))
+        trainer.extend(VisualBackprop(test_triplet[0], test_labels[0], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, 'epoch'))
+        trainer.extend(VisualBackprop(test_triplet[2], test_labels[2], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, 'epoch'))
 
         trainer.run()
 
