@@ -4,7 +4,7 @@ from chainer import training
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.decomposition import PCA
 
-from handwriting_embedding.eval_utils import get_embeddings
+from eval_utils import get_embeddings
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
