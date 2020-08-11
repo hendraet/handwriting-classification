@@ -1,11 +1,12 @@
-import math
 import pickle
+import scipy
+from collections import Counter
 
 import matplotlib
 import numpy as np
-from collections import Counter
 from scipy.cluster.vq import kmeans2
 from scipy.spatial.distance import cdist
+from scipy import stats
 from sklearn.decomposition import PCA
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 from sklearn.neighbors import KNeighborsClassifier
@@ -102,31 +103,11 @@ def get_embeddings_per_class(classes, embeddings, labels):
     return samples
 
 
-# TODO: remove
-# def get_dists_same_class(samples):
-#     class_dists = {}
-#     for target_class, embeddings in samples.items():
-#         dists = np.unique(cdist(embeddings, embeddings, 'sqeuclidean'))
-#         class_dists[target_class] = dists[dists != 0]  # remove comparisons of same samples
-#
-#     return class_dists
-#
-#
-# def get_dists_different_classes(samples):
-#     class_dists = {}
-#     for target_class, embeddings in samples.items():
-#         rest = np.asarray([samples[other_class] for other_class in samples.keys() if other_class != target_class])
-#         dists = cdist(embeddings, rest, 'sqeuclidean')
-#         class_dists[target_class] = dists
-#
-#     return class_dists
-
-
 def get_dists(samples, same_class):
     class_dists = {}
     for target_class, embeddings in samples.items():
         if same_class:
-            # unique to remove the second comparison between two samples because datasets are symetric
+            # np.unique to remove the second comparison between two samples because datasets are symetric
             dists = np.unique(cdist(embeddings, embeddings, 'sqeuclidean'))
             class_dists[target_class] = dists[dists != 0]  # remove comparisons of same samples
         else:
@@ -186,72 +167,99 @@ def dist_to_score(dist, max_dist):
     # return max(0, 1 - dist / max_dist)
 
 
+def get_probability_for_class(test_sample, samples, class_dist_hists, second_class, hist_edges):
+    rand_idx = np.random.randint(len(samples[second_class]))
+    second_class_sample = samples[second_class][rand_idx]
+    class_dist_hist = class_dist_hists[second_class]
+    dist = cdist(np.expand_dims(test_sample, 0), np.expand_dims(second_class_sample, 0), 'sqeuclidean')
+
+    bucket_idx = np.argmax(hist_edges > dist) - 1
+    bucket_value = class_dist_hist[bucket_idx]
+    bin_width = hist_edges[bucket_idx + 1] - hist_edges[bucket_idx]
+    return bucket_value * bin_width
+
+
 # TODO: rename
 def blah(embeddings, labels):
-    # AVG = True
-    # SCALE = 1.0
-    #
-    # target_dists = genuine_genuine_dists(data, AVG)
-    # target_dists = np.concatenate([target_dists[k].ravel()
-    #                                for k in target_dists.keys()])
-    #
-    # nontarget_dists = genuine_forgeries_dists(data, AVG)
-    # nontarget_dists = np.concatenate([nontarget_dists[k].ravel()
-    #                                   for k in nontarget_dists.keys()])
-
     classes = set(labels)
     samples = get_embeddings_per_class(classes, embeddings, labels)
-    same_class_dists = get_dists(samples, True)
-    diff_class_dists = get_dists(samples, False)
+    # contains all intra-class dists, e.g. the dist between two different text embeddings
+    same_class_dists = get_dists(samples, same_class=True)
+    # contains the dists from one class (key) to all other classes, e.g. dist text - date, text - num
+    diff_class_dists = get_dists(samples, same_class=False)
 
     # TODO: scores needed for C_llr calc
-
-    hist_bins = 50  # TODO: find or calculate a good value
+    hist_bins = 1000  # TODO: find or calculate a good value
     max_dist = max([max(dists) for x_dists in (same_class_dists, diff_class_dists) for dists in x_dists.values()])
 
-    same_class_dist_hist = {}
+    same_class_dist_hists = {}
     for target_class, dists in same_class_dists.items():
-        same_class_dist_hist[target_class] = np.histogram(dists, bins=hist_bins, range=(0.0, max_dist), density=True)[0]
-    same_class_dist_hist_flat = np.histogram(np.concatenate([dists for dists in same_class_dists.values()]),
-                                             bins=hist_bins, range=(0.0, max_dist), density=True)[0]
+        same_class_dist_hists[target_class], hist_edges = np.histogram(dists, bins=hist_bins, range=(0.0, max_dist), density=True)
 
-    diff_class_dist_hist = {}
+    other_class_dist_hists = {}
     for target_class, dists in diff_class_dists.items():
-        diff_class_dist_hist[target_class] = np.histogram(dists, bins=hist_bins, range=(0.0, max_dist), density=True)[0]
-    diff_class_dist_hist_flat = np.histogram(np.concatenate([dists for dists in diff_class_dists.values()]),
-                                             bins=hist_bins, range=(0.0, max_dist), density=True)[0]
+        other_class_dist_hists[target_class] = np.histogram(dists, bins=hist_bins, range=(0.0, max_dist), density=True)[0]
 
-    same = np.asarray([v for k, v in same_class_dist_hist.items()])
-    padding = np.zeros((1, hist_bins))
-    diff = np.asarray([v for k, v in diff_class_dist_hist.items()])
-    merged = np.concatenate((same, padding, diff))
-    merged_flat = np.concatenate((np.expand_dims(same_class_dist_hist_flat, 0), np.expand_dims(diff_class_dist_hist_flat, 0)))
+    # same = np.asarray([v for k, v in same_class_dist_hists.items()])
+    # padding = np.zeros((1, hist_bins))
+    # diff = np.asarray([v for k, v in other_class_dist_hists.items()])
+    # merged = np.concatenate((same, padding, diff))
+    # merged_flat = np.concatenate((np.expand_dims(same_class_dist_hist_flat, 0), np.expand_dims(diff_class_dist_hist_flat, 0)))
+
+    import matplotlib
+    matplotlib.use("TkAgg")
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(len(classes), 1)
+    for ax, cl in zip(axs, classes):
+        center = (hist_edges[:-1] + hist_edges[1:]) / 2
+        width = 1.0 * (hist_edges[1] - hist_edges[0])
+        xx = np.linspace(0, max_dist, hist_bins)
+
+        same_hist = same_class_dist_hists[cl]
+        # ax.bar(center, same_hist, align='center', width=width)
+        same_hist_dist = scipy.stats.rv_histogram((same_hist, hist_edges))
+        ax.plot(xx, same_hist_dist.pdf(xx), "r")
+
+        other_hist = other_class_dist_hists[cl]
+        # ax.bar(center, other_hist, align='center', width=width)
+        other_hist_dist = scipy.stats.rv_histogram((other_hist, hist_edges))
+        ax.plot(xx, other_hist_dist.pdf(xx), "b")
+
+    plt.show()
+
+    # TODO
     return
-    # ----------------------------------
-    max_dist = np.max(np.concatenate((target_dists, nontarget_dists)))
-    target_scores = list(map(lambda s: dist_to_score(s, max_dist),
-                             target_dists))
-    nontarget_scores = list(map(lambda s: dist_to_score(s, max_dist),
-                                nontarget_dists))
 
-    HIST_BINS = 1000  # 50 seems to be good for visualization
-    target_bins, target_bin_edges = np.histogram(target_scores,
-                                                 bins=HIST_BINS,
-                                                 range=(0.0, SCALE),
-                                                 density=True)
-    nontarget_bins, nontarget_bin_edges = np.histogram(nontarget_scores,
-                                                       bins=HIST_BINS,
-                                                       range=(0.0, SCALE),
-                                                       density=True)
+    test_samples = []
+    for cl in classes:
+        for i in range(1000):
+            test_samples.append((cl, samples[cl][i]))
 
-    target_dbins, target_dbin_edges = np.histogram(target_dists,
-                                                   bins=HIST_BINS,
-                                                   range=(0.0, max_dist),
-                                                   density=True)
-    nontarget_dbins, nontarget_dbin_edges = np.histogram(nontarget_dists,
-                                                         bins=HIST_BINS,
-                                                         range=(0.0, max_dist),
-                                                         density=True)
+    correct_prediction = {}
+    for actual_class, test_sample in test_samples:
+        # TODO: method?
+        log_likelihood_ratios = {}
+        for assumed_class in classes:
+            same_prob = get_probability_for_class(test_sample, samples, same_class_dist_hists, assumed_class, hist_edges)
+
+            other_class = np.random.choice([c for c in classes if c != assumed_class])
+            other_prob = get_probability_for_class(test_sample, samples, other_class_dist_hists, other_class, hist_edges)
+            llr = np.log(same_prob / other_prob)
+            log_likelihood_ratios[assumed_class] = llr
+
+        highest_llr = sorted([(cl, value) for cl, value in log_likelihood_ratios.items()], key=lambda x: x[1])[0]
+        predicted_class = highest_llr[0]
+        # print(f"Actual class: {actual_class}, predicted class: {predicted_class} ({highest_llr[1]})")
+        if actual_class not in correct_prediction:
+            correct_prediction[actual_class] = []
+        correct_prediction[actual_class].append(1 if actual_class == predicted_class else 0)
+
+    for cl, predictions in correct_prediction.items():
+        acc = np.mean(np.asarray(predictions))
+        print(f"Acc for {cl}: {acc}")
+
+    return
+
 
 def main():
     embeddings_filename = 'embeddings_5classes_9k.npy'
@@ -274,10 +282,12 @@ def main():
     # saved_labels = np.delete(saved_labels, indices, axis=0)
     # saved_embeddings = np.delete(saved_embeddings, indices, axis=0)
 
+    # TODO
     support_labels = saved_labels
     support_embeddings = saved_embeddings
 
     blah(support_embeddings, support_labels)
+    return
 
     predicted_labels = classify_embeddings(saved_embeddings, support_labels, support_embeddings, saved_labels)
 
