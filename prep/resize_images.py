@@ -73,9 +73,9 @@ def main():
     create_tar(new_dataset_name, new_dataset_description, out_dir, tar_dir)
 
 
-def create_tar(new_dataset_name, new_dataset_description, outdir, tar_dir, final_dir=None):
+def create_tar(new_dataset_name, new_dataset_description, out_dir, tar_dir, final_dir=None):
     tar_filename = os.path.join(tar_dir, new_dataset_name + ".tar.bz2")
-    image_files = [os.path.join(outdir, fn) for fn in os.listdir(outdir) if fn.endswith(".png")]
+    image_files = [os.path.join(out_dir, fn) for fn in os.listdir(out_dir) if fn.endswith(".png")]
     with tarfile.open(tar_filename, "w:bz2") as tar:
         for filename in image_files:
             tar.add(filename, arcname=os.path.basename(filename))

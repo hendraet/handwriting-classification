@@ -1,17 +1,95 @@
 # TODOS
 
+- [X] Mischen Handschrift printed text
+- [X] labels plotten
+- [X] Alphanum:
+  - Großbuchstaben, Unterstriche, Zahlen 
+  - erst random dann mit Regelmäßigkeit
+- [X] visual backprop (kein linear layer zwischendrin)
+- [ ] Monatswörter
+
 ## Fragen
 
+**07.08.**
+- hard classifier?
+- soft wie? Hannes Ansatz nur binär
+- Hannes dist to score?
+- ganz anderer Ansatz? (log reg trainieren?)
+
+**06.05.**
+- Wie rausfinden, welcher Teil Dinge kaputt macht? - erst mal runterbrechen auf simplere Bild-Generierung (K=1/3-channel-Input)
+- Würde anderer Discriminator nen Unterschied machen? - ja, Discriminator sind relativ speziell und funktionieren nur mit den Gen zusammen
+- strided conv in dis? - kein Gamechanger
+--> Update Prozess anschauen, evtl. mal die Standard-GAN-Impl von Pytorch anschauen
+
+**26.04.**
+Issues/solutions vanishing gradient:
+- tanh/Sigmoid functions (check activation functions)
+- batch norm helps (more batchnorm?)
+- Gradient noise addition?
+- do I train ResBlocks correctly (read somewhere that gradient should add up)
+- learning rate changes?
+- weight initialization
+  - Xavier for tanh
+  - kaiming for convs (at least in res_blocks)
+  - constant for weight (1) and bias (0)
+
+**24.04.**
+- der gaze optimizer-Kram
+- zu viele dims von Wörtern (640)? eher weniger?
+
+--> gradients, weigths plotten (tensorboard)
+--> 320
+--> Testweise: lr stark runtersetzen, batch_size = 1
+--> Bildbreit/größe runternehmen (Bartzi: 200 x 64) - Nöpe (wörter overflowen sonst)
+
+**old**
+- Wie stell ich die conv-Parameter im Discriminator ein?
+- Wo soll das avg pooling im Discriminator hin?
+  - Einfach einen ans Ende
+  - Any intuition for values? - Einfach schauen was andere gemacht
+- ResBlocks:
+  - Feature Map halbiert sich nach jeder Ebene, Channels verdoppeln sich
+- Ist der Classifier einfach ein flacher fully connected layer? - ja
+- Plan:
+  - conv
+  - 6 mal \_makenet aber mit 4er ResBlocks + avg pooling -
+  - Fc
+
+- Wie funktioniert die Loss calc für das seq2seq Ding?
+  - Netzwerk wir nur auf echten Daten optimiert, aber nicht pretained. Gleichzeitig werden auch irgendwie die generierten Daten reingesteckt. Wie passt das zusammen?
+  - Loss-Calc-Formel sieht so aus, als würde das sowohl auf echten, als auch auf generierten Daten passieren. (x~{X^-,X})
+  - Ist Optim. des Netzwerks ein seperater Prozess und wirdd dafür einfach ein anderer Loss genutzt?
+  - **batch-wise, erst alle Discriminator optimieren und dann generative Network**
+
 ## Last time
-- Mit Bartzi gechatte
+- Nur ein paar kleinere Tweaks am Generative Network, wie Upsampling, Hidden Layer für MLP researched, normailiserung der Bilder auf -1;1
+- mit Bartzi weitere Dinge besprochen
+
+%%%%%%%%%%%%%%%%%%%%%
+
+## seq2seq analysis
+- new dataset from genreated images - merged with train dataset of real images
+
+## GANwriting
+- [X] Embedding size auf 128 runternehmen
+- [X] expand und repeat verifien
+- [X] VGG19 zum Laufen bekommen
+- [X] cwe-output channels runternehmen und chars zusammenstacken
+- [X] mal höhere Bilder für VGG-Input testen - 672x96 mit 5er upsampling läuft
+- [X] Embedding kleiner machen so auf 32
+- [] Gaussian-Noise fixen
+- [] irgendwas zwischen 350 und 672 width reinwerfen und schauen
+- [] crop the word-iamdb-dataset down to 60k samples
+- [] figure out how empty char is encoded in case of loss comp
 
 ## Ansätze finden
 - [X] Code/Models für GAN anfragen
 - [X] GAN-Paper nochmal lesen und verstehen und dazu nochmal schreiben
 - [X] Ref 15 anschauen
-- [] GAN bauen
-  - [] Netzwerkgraphen malen (vor allem für Generator)
-  - [] in pytorch examples reinschauen
+- [X] GAN bauen
+  - [X] Netzwerkgraphen malen (vor allem für Generator)
+  - [X] in pytorch examples reinschauen
 
 ## Datensatzgenerierung
 - [X] Fontsize (oder image size) dynamisch anpassen

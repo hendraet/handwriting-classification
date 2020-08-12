@@ -129,6 +129,7 @@ def main():
                                             draw_images=True)
 
         # Add embeddings to projector
+        # TODO: add metadata of classifcation
         create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
 
     print("Done")

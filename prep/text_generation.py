@@ -46,6 +46,7 @@ def generate_text(word_list):
 
 
 def generate_alpha_num():
+    # TODO: make sure at least one num and one char
     length = random.randint(3, 12)
     possible_chars = string.ascii_uppercase + string.ascii_lowercase + string.digits + "_"
     x = ''.join(random.choice(possible_chars) for _ in range(length))

@@ -125,4 +125,10 @@ handwriting_embedding/own.conf
 cluster_images
 washingtondb-v1.0
 orig_datasets
+prep/iamondb/dates.csv
+prep/iamondb/dates.npy
+prep/iamondb/original-xml-all.tar.gz
+prep/iamondb/original/
+synth_models/
+handwriting_embedding/datasets/
 
