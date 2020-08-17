@@ -25,3 +25,4 @@ Shapely==1.6.4.post2
 six==1.14.0
 typing==3.6.6
 typing-extensions==3.6.6
+tensorboardX

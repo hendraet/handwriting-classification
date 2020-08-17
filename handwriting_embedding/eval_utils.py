@@ -29,13 +29,16 @@ def create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
 
     n = square_imgs.shape[0]
     max_dim = int(8192 // sqrt(n))
-    resized_imgs = []
-    for img in square_imgs:
-        img = np.transpose(img, (2, 1, 0))
-        resized_img = cv2.resize(img, dsize=(max_dim, max_dim), interpolation=cv2.INTER_CUBIC)
-        resized_img = np.transpose(resized_img, (2, 1, 0))
-        resized_imgs.append(resized_img)
-    resized_imgs = np.asarray(resized_imgs)
+    if max_dim < square_imgs.shape[-1]:
+        resized_imgs = []
+        for img in square_imgs:
+            img = np.transpose(img, (2, 1, 0))
+            resized_img = cv2.resize(img, dsize=(max_dim, max_dim), interpolation=cv2.INTER_CUBIC)
+            resized_img = np.transpose(resized_img, (2, 1, 0))
+            resized_imgs.append(resized_img)
+        resized_imgs = np.asarray(resized_imgs)
+    else:
+        resized_imgs = square_imgs
 
     writer.add_embedding(embeddings, metadata=test_labels, label_img=resized_imgs)
 
