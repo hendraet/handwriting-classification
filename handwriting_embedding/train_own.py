@@ -1,35 +1,38 @@
 import argparse
 import configparser
+import json
 import sys
 
+import copy
 import matplotlib
 import numpy as np
 import os
 import triplet
 from chainer import training, cuda, backend, serializers, optimizers
 from chainer.training import extensions
+from classification import evaluate_embeddings
 from dataset_utils import load_dataset
 from eval_utils import create_tensorboard_embeddings
 from eval_utils import get_embeddings
-from extensions.cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
+from extensions.cluster_plotter import ClusterPlotter
 from models import Classifier
 from models import PooledResNet
 from tensorboardX import SummaryWriter
 from triplet_iterator import TripletIterator
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 
 def get_trainer(updater, evaluator, epochs):
-    trainer = training.Trainer(updater, (epochs, 'epoch'), out='result')
+    trainer = training.Trainer(updater, (epochs, "epoch"), out="result")
     trainer.extend(evaluator)
     # TODO: reduce LR -- how to update every X epochs?
-    # trainer.extend(extensions.ExponentialShift('lr', 0.1, target=lr*0.0001))
+    # trainer.extend(extensions.ExponentialShift("lr", 0.1, target=lr*0.0001))
     trainer.extend(extensions.LogReport())
     trainer.extend(extensions.ProgressBar(
-        (epochs, 'epoch'), update_interval=10))
+        (epochs, "epoch"), update_interval=10))
     trainer.extend(extensions.PrintReport(
-        ['epoch', 'main/loss', 'validation/main/loss']))
+        ["epoch", "main/loss", "validation/main/loss"]))
     return trainer
 
 
@@ -55,8 +58,9 @@ def main():
     model_dir = args.model_dir
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
-    model_name = 'iamondb_res' + str(resnet_size) + "_" + args.model_suffix
+    model_name = f"res{str(resnet_size)}_{args.model_suffix}"
     base_model = PooledResNet(resnet_size)
+    model = Classifier(base_model)
     plot_loss = True
 
     json_files = args.json_files
@@ -64,16 +68,18 @@ def main():
     config = configparser.ConfigParser()
     config.read(args.config)
 
-    batch_size = int(config['TRAINING']['batch_size'])
-    epochs = int(config['TRAINING']['epochs'])
-    lr = float(config['TRAINING']['lr'])
-    # lr_interval = int(config['TRAINING']['lr_interval'])
-    gpu = config['TRAINING']['gpu']
+    batch_size = int(config["TRAINING"]["batch_size"])
+    epochs = int(config["TRAINING"]["epochs"])
+    lr = float(config["TRAINING"]["lr"])
+    # lr_interval = int(config["TRAINING"]["lr_interval"])
+    gpu = config["TRAINING"]["gpu"]
 
     xp = cuda.cupy if int(gpu) >= 0 else np
 
     if args.log_dir is not None:
-        writer = SummaryWriter(os.path.join("runs/", args.log_dir))
+        log_dir = os.path.join("runs/", args.log_dir)
+        assert not os.listdir(log_dir), "log dir not empty"
+        writer = SummaryWriter(log_dir)
     else:
         writer = SummaryWriter()
 
@@ -86,6 +92,12 @@ def main():
     #################### Train and Save Model ########################################
 
     if retrain:
+        # serializers.load_npz(os.path.join(model_dir, model_name + "_base.npz"), base_model)
+        if int(gpu) >= 0:
+            backend.get_device(gpu).use()
+            base_model.to_gpu()
+            model.to_gpu()
+
         train_iter = TripletIterator(train_triplet,
                                      batch_size=batch_size,
                                      repeat=True,
@@ -93,8 +105,6 @@ def main():
         test_iter = TripletIterator(test_triplet,
                                     batch_size=batch_size,
                                     xp=xp)
-
-        model = Classifier(base_model)
 
         optimizer = optimizers.Adam(alpha=lr)
         optimizer.setup(model)
@@ -104,37 +114,43 @@ def main():
 
         trainer = get_trainer(updater, evaluator, epochs)
         if plot_loss:
-            trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss'], 'epoch', file_name='loss.png'))
-        trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, batch_size, xp), trigger=(1, 'epoch'))
-        # trainer.extend(VisualBackprop(test_triplet[0], test_labels[0], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, 'epoch'))
-        # trainer.extend(VisualBackprop(test_triplet[2], test_labels[2], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, 'epoch'))
-
-        embeddings = get_embeddings(base_model, test_triplet, batch_size, xp)
-        create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
+            trainer.extend(extensions.PlotReport(["main/loss", "validation/main/loss"], "epoch", file_name="loss.png"))
+        trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, batch_size, xp), trigger=(1, "epoch"))
+        # trainer.extend(VisualBackprop(test_triplet[0], test_labels[0], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
+        # trainer.extend(VisualBackprop(test_triplet[2], test_labels[2], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
 
         trainer.run()
 
-        serializers.save_npz(os.path.join(model_dir, model_name + '.npz'), base_model)
+        serializers.save_npz(os.path.join(model_dir, model_name + "_base.npz"), base_model)
     else:
-        serializers.load_npz(os.path.join(model_dir, model_name + '.npz'), base_model)
+        serializers.load_npz(os.path.join(model_dir, model_name + "_base.npz"), base_model)
+        print("Models loaded")
 
         if int(gpu) >= 0:
             backend.get_device(gpu).use()
             base_model.to_gpu()
+            model.to_gpu()
+
+        l = copy.deepcopy(test_labels)
+        t = copy.deepcopy(test_triplet)
 
         embeddings = get_embeddings(base_model, test_triplet, batch_size, xp)
-        draw_embeddings_cluster_with_images('cluster_final.png', embeddings, test_labels, test_triplet,
-                                            draw_images=False)
-        draw_embeddings_cluster_with_images('cluster_final_with_images.png', embeddings, test_labels, test_triplet,
-                                            draw_images=True)
+        # draw_embeddings_cluster_with_images("cluster_final.png", embeddings, test_labels, test_triplet,
+        #                                     draw_images=False)
+        # draw_embeddings_cluster_with_images("cluster_final_with_images.png", embeddings, test_labels, test_triplet,
+        #                                     draw_images=True)
+
+        metrics = evaluate_embeddings(embeddings, test_labels)
+        with open(os.path.join(writer.logdir, "metrics.log"), "w") as log_file:
+            json.dump(metrics, log_file)
 
         # Add embeddings to projector
-        # TODO: add metadata of classifcation
+        test_triplet = 1 - test_triplet  # colours are inverted for model - "re-invert" for better visualisation
         create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
 
     print("Done")
     sys.exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
