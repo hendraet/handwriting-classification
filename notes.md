@@ -1,12 +1,28 @@
-# TODOS
+# Notes
 
-- [X] Mischen Handschrift printed text
-- [X] labels plotten
-- [X] Alphanum:
-  - Großbuchstaben, Unterstriche, Zahlen 
-  - erst random dann mit Regelmäßigkeit
-- [X] visual backprop (kein linear layer zwischendrin)
-- [ ] Monatswörter
+## Roadmap
+
+GANwriting
+
+- [X] evaluate if any stage of the GANwriting model is suitable to produce more samples (maybe take 2500 sth)
+- [X] generate more GANwriting samples
+- [ ] merge them into the final dataset
+
+WPI
+
+- [X] create proper dataset from the labeled wpi images
+- [ ] resize and pad
+- [ ] some kind of postprocessing e.g. for backgrounds
+
+Experiments
+
+- [X] look for other embedding classification algorithms - probs none, except llr
+- [X] get accuracy, etc. from standard classifier and see how well it performs in comparison to own algorithm - there's no standard classifier
+- [ ] get performance of GANwriting only
+- [ ] get performance of GANwriting mixed with printed text
+- [ ] get performance of WPI dataset based on pretrained models
+- [ ] compare Hannes OneVsAll Approach with the other apporaches
+- [ ] see how well classification algorithm handles unseen data
 
 ## Fragen
 
