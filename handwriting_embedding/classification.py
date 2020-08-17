@@ -1,7 +1,8 @@
+import argparse
 import pickle
 from collections import Counter
 
-import argparse
+import copy
 import matplotlib
 import numpy as np
 import random
@@ -10,8 +11,8 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 from sklearn.neighbors import KNeighborsClassifier
 
-matplotlib.use("TkAgg")
-# matplotlib.use('Agg')
+# matplotlib.use("TkAgg")
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 
@@ -82,7 +83,6 @@ def classify_embeddings(embeddings, support_labels, support_embeddings, possible
     predicted_centroid_labels = knn.predict(centroid)
     if len(set(predicted_centroid_labels)) < num_centroids:
         knn_probs = knn.predict_proba(centroid)
-        print
 
     if actual_labels is not None:
         translated_labels = translate_labels(actual_labels, labels, predicted_centroid_labels)
@@ -92,18 +92,21 @@ def classify_embeddings(embeddings, support_labels, support_embeddings, possible
 
 
 def get_datasets(saved_embeddings, saved_labels, ratio=0.1, stable=False):
-    min_num_of_samples = min(Counter(saved_labels).values())
+    embeddings = saved_embeddings.copy()
+    labels = copy.copy(saved_labels)
+
+    min_num_of_samples = min(Counter(labels).values())
     num_support_samples = int(ratio * min_num_of_samples)
 
     if not stable:
-        tmp = list(zip(saved_embeddings, saved_labels))
+        tmp = list(zip(embeddings, labels))
         random.shuffle(tmp)
-        saved_embeddings, saved_labels = zip(*tmp)
+        embeddings, labels = zip(*tmp)
 
     support_samples = {}
     test_embeddings = []
     test_labels = []
-    for emb, label in zip(saved_embeddings, saved_labels):
+    for emb, label in zip(embeddings, labels):
         if label not in support_samples:
             support_samples[label] = []
         if len(support_samples[label]) < num_support_samples:
@@ -113,14 +116,26 @@ def get_datasets(saved_embeddings, saved_labels, ratio=0.1, stable=False):
             test_labels.append(label)
 
     flat_support_samples = []
-    for label, embeddings in support_samples.items():
-        assert len(embeddings) == num_support_samples
-        for emb in embeddings:
+    for label, embedding_list in support_samples.items():
+        assert len(embedding_list) == num_support_samples
+        for emb in embedding_list:
             flat_support_samples.append((emb, label))
     support_embeddings, support_labels = zip(*flat_support_samples)
     support_embeddings = np.asarray(support_embeddings)
 
     return support_embeddings, support_labels, test_embeddings, test_labels
+
+
+def format_metrics(metrics):
+    formatted_metrics = f"Predicted label distribution: {metrics['predicted_distribution']}\n" \
+                        f"Results:\n" \
+                        f"Accuracy:  {metrics['accuracy']}\n" \
+                        f"Classes:    {''.join(el.ljust(11) for el in [*sorted(metrics['classes']), ' weighted'])}\n" \
+                        f"Precision: {metrics['precision']} {metrics['w_precision']}\n" \
+                        f"Recall:    {metrics['recall']} {metrics['w_recall']}\n" \
+                        f"F-score:   {metrics['f_score']} {metrics['w_f_score']}\n" \
+                        f"Support:    {''.join(str(el).ljust(11) for el in metrics['support'])}"
+    return formatted_metrics
 
 
 def evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embeddings, test_labels, verbose=True):
@@ -133,18 +148,23 @@ def evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embe
     precision, recall, f_score, support = precision_recall_fscore_support(test_labels, predicted_labels)
     w_precision, w_recall, w_f_score, _ = precision_recall_fscore_support(test_labels, predicted_labels,
                                                                           average="weighted")
-    if verbose:
-        print(set(predicted_labels))
-        print(f"Predicted label distribution: {Counter(predicted_labels)}")
-        print(f"Results:\n"
-              f"Accuracy:  {accuracy}\n"
-              f"Classes:    {''.join(el.ljust(11) for el in [*sorted(classes), ' weighted'])}\n"
-              f"Precision: {precision} {w_precision}\n"
-              f"Recall:    {recall} {w_recall}\n"
-              f"F-score:   {f_score} {w_f_score}\n"
-              f"Support:    {''.join(str(el).ljust(11) for el in support)}")
+    metrics = {
+        "accuracy": accuracy,
+        "precision": precision.tolist(),
+        "w_precision": w_precision,
+        "recall": recall.tolist(),
+        "w_recall": w_recall,
+        "f_score": f_score.tolist(),
+        "w_f_score": w_f_score,
+        "support": support.tolist(),
+        "predicted_distribution": Counter(predicted_labels),
+        "classes": classes
+    }
 
-    return w_f_score
+    if verbose:
+        print(format_metrics(metrics))
+
+    return metrics
 
 
 def run_experiment(saved_embeddings, saved_labels):
@@ -167,6 +187,11 @@ def run_experiment(saved_embeddings, saved_labels):
     plt.show()
 
 
+def evaluate_embeddings(saved_embeddings, saved_labels):
+    support_embeddings, support_labels, test_embeddings, test_labels = get_datasets(saved_embeddings, saved_labels)
+    return evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embeddings, test_labels)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--single-run", action="store_true",
@@ -181,8 +206,7 @@ def main():
         saved_labels = list(pickle.load(f))
 
     if args.single_run:
-        support_embeddings, support_labels, test_embeddings, test_labels = get_datasets(saved_embeddings, saved_labels)
-        w_f_score = evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embeddings, test_labels)
+        evaluate_embeddings(saved_embeddings, saved_labels)
     else:
         run_experiment(saved_embeddings, saved_labels)
 
