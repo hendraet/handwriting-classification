@@ -16,34 +16,18 @@ def image_to_array(path, invert_colours=False):
     return np.transpose(img_array, (2, 0, 1))
 
 
-def generate_datasets(json_paths, dataset_dir):
-    dataset = {}
-    for dataset_description_path in json_paths:
-        with open(os.path.join(dataset_dir, dataset_description_path), 'r') as f:
-            json_file = json.load(f)
+def parse_json(dataset_dir, json_path):
+    classes = set()
+    dataset = []
 
-        for sample in json_file:
-            # colour inversion, so that the background has a value of 0 and represent "no information"
+    with open(os.path.join(dataset_dir, json_path), "r") as json_file:
+        json_content = json.load(json_file)
+        for sample in json_content:
             img = image_to_array(os.path.join(dataset_dir, sample['path']), invert_colours=True)
-            if sample['type'] in dataset:
-                dataset[sample['type']].append(img)
-            else:
-                dataset[sample['type']] = [img]
-    classes = dataset.keys()
+            dataset.append((img, sample["type"]))
+            classes.add(sample["type"])
 
-    train = []
-    test = []
-    smallest_class_len = min([len(ds) for ds in dataset.values()])
-    threshold = int(smallest_class_len * 0.9)
-    for class_name, imgs in dataset.items():
-        random.shuffle(imgs)  # Makes sure that no internal structure in the json file messes up dataset
-        train.extend([(img, class_name) for img in imgs[:threshold]])
-        test.extend([(img, class_name) for img in imgs[threshold:smallest_class_len]])
-
-    random.shuffle(train)
-    random.shuffle(test)
-
-    return train, test, classes
+    return dataset, classes
 
 
 def generate_triplet_part(dataset, is_negative, classes):
@@ -79,14 +63,10 @@ def generate_triplet(dataset, classes):
     return np.asarray(triplet), np.asarray(labels)
 
 
-def load_dataset(json_files, args):
-    train, test, classes = generate_datasets(json_files, args.dataset_dir)
+def load_dataset(args):
+    train, classes = parse_json(args.dataset_dir, args.train_path)
+    test, _ = parse_json(args.dataset_dir, args.test_path)
     print("Datasets loaded. train samples: {}, test samples: {}".format(len(train), len(test)))
-
-    # mnist_dataset = get_mnist(ndim=3)
-    # train = [(np.tile(sample[0], (3, 1, 1)), str(sample[1])) for sample in mnist_dataset[0]]
-    # test = [(np.tile(sample[0], (3, 1, 1)), str(sample[1])) for sample in mnist_dataset[1]]
-    # classes = set([label for img, label in train])
 
     train_triplet, train_labels = generate_triplet(train, classes)
     assert not [i for (i, label) in enumerate(train_labels[0::3]) if label == train_labels[i * 3 + 2]]

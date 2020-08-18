@@ -43,8 +43,10 @@ def main():
     parser.add_argument("model_suffix", type=str, help="Suffix that should be added to the end of the model filename")
     parser.add_argument("dataset_dir", type=str,
                         help="Directory where the images and the dataset description is stored")
-    parser.add_argument("json_files", nargs="+", type=str,
-                        help="JSON files that contain the string-path-type mapping for each sample")
+    # parser.add_argument("json_files", nargs="+", type=str,
+    #                     help="JSON files that contain the string-path-type mapping for each sample")
+    parser.add_argument("train_path", type=str, help="path to JSON file containing train set information")
+    parser.add_argument("test_path", type=str, help="path to JSON file containing test set information")
     parser.add_argument("-r", "--retrain", action="store_true", help="Model will be trained from scratch")
     parser.add_argument("-md", "--model-dir", type=str, default="models",
                         help="Dir where models will be saved/loaded from")
@@ -63,8 +65,6 @@ def main():
     model = Classifier(base_model)
     plot_loss = True
 
-    json_files = args.json_files
-
     config = configparser.ConfigParser()
     config.read(args.config)
 
@@ -78,7 +78,8 @@ def main():
 
     if args.log_dir is not None:
         log_dir = os.path.join("runs/", args.log_dir)
-        assert not os.listdir(log_dir), "log dir not empty"
+        if os.path.exists(log_dir):
+            assert not os.listdir(log_dir), "log dir not empty"
         writer = SummaryWriter(log_dir)
     else:
         writer = SummaryWriter()
@@ -87,7 +88,7 @@ def main():
 
     #################### DATASETS ###########################
 
-    train_triplet, train_labels, test_triplet, test_labels = load_dataset(json_files, args)
+    train_triplet, train_labels, test_triplet, test_labels = load_dataset(args)
 
     #################### Train and Save Model ########################################
 
@@ -130,9 +131,6 @@ def main():
             backend.get_device(gpu).use()
             base_model.to_gpu()
             model.to_gpu()
-
-        l = copy.deepcopy(test_labels)
-        t = copy.deepcopy(test_triplet)
 
         embeddings = get_embeddings(base_model, test_triplet, batch_size, xp)
         # draw_embeddings_cluster_with_images("cluster_final.png", embeddings, test_labels, test_triplet,
