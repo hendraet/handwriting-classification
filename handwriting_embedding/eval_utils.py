@@ -29,6 +29,10 @@ def create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
 
     n = square_imgs.shape[0]
     max_dim = int(8192 // sqrt(n))
+    # Workaround because the formula above (given by docs) is not working every time e.g. for 2640 samples of size 216
+    if int(sqrt(n)) * max_dim + max_dim > 8192:
+        max_dim = int((8192 - max_dim) // sqrt(n))
+
     if max_dim < square_imgs.shape[-1]:
         resized_imgs = []
         for img in square_imgs:

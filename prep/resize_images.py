@@ -39,17 +39,18 @@ def resize_img(img, target_dimensions, padding_color=0, additional_padding=(0, 0
 
 def main():
     tar_dir = "datasets/tars"
-    out_dir = "../handwriting_embedding/datasets"
-    in_dir = "datasets/"
-    dataset_description_filename = "dataset_descriptions/mixed_gw_rep_words_dates_40k.json"
-    new_dataset_name = "mixed_gw_rep_words_dates_40k_padded"
-    # dataset_description_filename = "datasets/tars/iamondb_generated_dates_50k.json"
+    out_dir = "../handwriting_embedding/datasets/wpi_resized"
+    # in_dir = "datasets/"
+    in_dir = "../handwriting_embedding/datasets/wpi_orig"
+    # dataset_description_filename = "dataset_descriptions/mixed_gw_rep_words_dates_40k.json"
+    dataset_description_filename = "../handwriting_embedding/datasets/wpi_orig/wpi_words_dates_nums_alphanum.json"
+    new_dataset_name = "wpi_words_dates_nums_alphanums"
     target_dimensions = (216, 64)
     padding_colour = 255
-    additional_padding = True
+    additional_padding = False
 
     image_files = [fn for fn in os.listdir(out_dir) if fn.endswith(".png")]
-    assert not image_files, "There are already image files in the out dir"
+    # assert not image_files, "There are already image files in the out dir"
 
     with open(dataset_description_filename, "r") as j_file:
         num_json = json.load(j_file)
@@ -58,6 +59,9 @@ def main():
     for img_path in images:
         img_path = os.path.basename(img_path)
         img = Image.open(join(in_dir, img_path))
+        import numpy
+        if 0 in numpy.array(img):
+            print(img_path)
 
         padding_right = max(0, int(random.gauss(0, 35))) if additional_padding else 0
         padded_img = resize_img(img, target_dimensions, padding_colour, additional_padding=(0, 0, padding_right, 0))
