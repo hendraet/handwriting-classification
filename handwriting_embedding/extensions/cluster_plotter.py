@@ -65,20 +65,21 @@ def draw_embeddings_cluster_with_images(filename, embeddings, labels, dataset, d
             ax.scatter(coords[:, 0], coords[:, 1], label=item)
 
     ax.legend(fontsize='xx-small')
-    plt.savefig('result/' + filename, dpi=600)
+    plt.savefig(filename, dpi=600)
     plt.close(fig)
 
 
 class ClusterPlotter(training.Extension):
-    def __init__(self, model, labels, dataset, batch_size, xp):
+    def __init__(self, model, labels, dataset, batch_size, xp, logdir):
         self._model = model
         self._labels = labels
         self._dataset = dataset
         self._batchsize = batch_size
         self._xp = xp
+        self._logdir = logdir
 
     def __call__(self, trainer):
         epoch = trainer.updater.epoch
         embeddings = get_embeddings(self._model, self._dataset, self._batchsize, self._xp)
-        draw_embeddings_cluster_with_images('cluster_epoch_{}.png'.format(str(epoch).zfill(3)), embeddings,
+        draw_embeddings_cluster_with_images(f'{self._logdir}/cluster_epoch_{str(epoch).zfill(3)}.png', embeddings,
                                             self._labels, self._dataset, draw_images=False)

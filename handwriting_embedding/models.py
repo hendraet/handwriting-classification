@@ -1,3 +1,5 @@
+import math
+
 from chainer import Chain, report
 from chainer import functions as F
 from chainer.links.model.vision.resnet import _global_average_pooling_2d
@@ -5,9 +7,54 @@ from chainer.links.model.vision.resnet import _global_average_pooling_2d
 from resnet import ResNet
 
 
-class Classifier(Chain):
+def lossless_triplet_loss(anchor, positive, negative, N, beta=None, epsilon=1e-8):
+    """
+    N  --  The number of dimension
+    beta -- The scaling factor, N is recommended
+    epsilon -- The Epsilon value to prevent ln(0)
+    """
+
+    if beta is None:
+        beta = N
+
+    # pos_dist = F.sum((anchor - positive) ** 2, axis=1)
+    # neg_dist = F.sum((anchor - negative) ** 2, axis=1)
+
+    pos_dist = -F.log(-(F.sum((anchor - positive) ** 2, axis=1) / beta) + 1 + epsilon)
+    neg_dist = -F.log(-((N - F.sum((anchor - negative) ** 2, axis=1)) / beta) + 1 + epsilon)
+
+    loss = pos_dist + neg_dist
+
+    import chainer
+    import numpy
+    nloss = chainer.as_array(loss)
+    if numpy.isnan(nloss).any():
+        print()
+
+    return loss
+
+
+class LosslessClassifier(Chain):
     def __init__(self, predictor):
-        super(Classifier, self).__init__(predictor=predictor)
+        super(LosslessClassifier, self).__init__(predictor=predictor)
+
+    def __call__(self, x_a, x_p, x_n):
+        y_a, y_p, y_n = (self.predictor(x) for x in (x_a, x_p, x_n))
+        y_a = F.sigmoid(y_a)
+        y_p = F.sigmoid(y_p)
+        y_n = F.sigmoid(y_n)
+
+        N = y_a.shape[-1]
+        beta = N
+        loss = F.sum(lossless_triplet_loss(y_a, y_p, y_n, N, beta))
+
+        report({'loss': loss}, self)
+        return loss
+
+
+class StandardClassifier(Chain):
+    def __init__(self, predictor):
+        super(StandardClassifier, self).__init__(predictor=predictor)
 
     def __call__(self, x_a, x_p, x_n):
         y_a, y_p, y_n = (self.predictor(x) for x in (x_a, x_p, x_n))
@@ -22,12 +69,11 @@ class PooledResNet(Chain):
 
         with self.init_scope():
             self.feature_extractor = ResNet(n_layers)
-        self.visual_backprop_anchors = []
+        # self.visual_backprop_anchors = []
 
     def __call__(self, x):
-        self.visual_backprop_anchors.clear()
+        # self.visual_backprop_anchors.clear()
         h = self.feature_extractor(x)
-        self.visual_backprop_anchors.append(h)
+        # self.visual_backprop_anchors.append(h)
         h = _global_average_pooling_2d(h)
         return h
-
