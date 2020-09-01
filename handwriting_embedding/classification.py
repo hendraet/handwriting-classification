@@ -144,6 +144,15 @@ def evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embe
     #                                        actual_labels=test_labels)
     predicted_labels = classify_embeddings(test_embeddings, support_labels, support_embeddings, classes)
 
+    metrics = get_metrics(predicted_labels, test_labels, classes)
+
+    if verbose:
+        print(format_metrics(metrics))
+
+    return metrics
+
+
+def get_metrics(predicted_labels, test_labels, classes):
     accuracy = accuracy_score(test_labels, predicted_labels)
     precision, recall, f_score, support = precision_recall_fscore_support(test_labels, predicted_labels)
     w_precision, w_recall, w_f_score, _ = precision_recall_fscore_support(test_labels, predicted_labels,
@@ -160,10 +169,6 @@ def evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embe
         "predicted_distribution": Counter(predicted_labels),
         "classes": classes
     }
-
-    if verbose:
-        print(format_metrics(metrics))
-
     return metrics
 
 

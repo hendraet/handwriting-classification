@@ -1,6 +1,7 @@
 import math
 
 from chainer import Chain, report
+import chainer.links as L
 from chainer import functions as F
 from chainer.links.model.vision.resnet import _global_average_pooling_2d
 
@@ -61,6 +62,25 @@ class StandardClassifier(Chain):
         loss = F.triplet(y_a, y_p, y_n, margin=1)
         report({'loss': loss}, self)
         return loss
+
+
+class CrossEntropyClassifier(Chain):
+    def __init__(self, predictor, num_classes, xp):
+        super(CrossEntropyClassifier, self).__init__(predictor=predictor)
+        self.linear = L.Linear(None, num_classes).to_gpu()
+        self._xp = xp
+
+    def __call__(self, x, y):
+        h = self.linear(x)
+        loss = F.softmax_cross_entropy(h, y)
+        report({'loss': loss}, self)
+        return loss
+
+    def predict(self, x):
+        h = self.linear(x)
+        prediction = self._xp.argmax(F.softmax(h).array, axis=1)
+        return prediction
+
 
 
 class PooledResNet(Chain):

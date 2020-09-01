@@ -68,6 +68,12 @@ def load_dataset(args):
     test, _ = parse_json(args.dataset_dir, args.test_path)
     print("Datasets loaded. train samples: {}, test samples: {}".format(len(train), len(test)))
 
+    return train, test, classes
+
+
+def load_triplet_dataset(args):
+    train, test, classes = load_dataset(args)
+
     train_triplet, train_labels = generate_triplet(train, classes)
     assert not [i for (i, label) in enumerate(train_labels[0::3]) if label == train_labels[i * 3 + 2]]
     print("Train done.")
