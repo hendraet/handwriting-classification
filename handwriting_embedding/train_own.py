@@ -106,6 +106,10 @@ def main():
     else:
         writer = SummaryWriter()
 
+    with open(os.path.join(writer.logdir, "args.log"), "w") as log_file:
+        log_file.write(f"{' '.join(sys.argv[1:])}\n")
+    shutil.copy(args.config, writer.logdir)
+
     print("PRETRAINED:", str(pretrained_model_name), "MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size),
           "EPOCHS:", str(epochs))
 
