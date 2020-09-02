@@ -1,6 +1,8 @@
 import argparse
 import configparser
+import glob
 import json
+import math
 import sys
 
 import matplotlib
@@ -9,7 +11,7 @@ import os
 import shutil
 from chainer import training, cuda, backend, serializers, optimizers
 from chainer.iterators import SerialIterator
-from chainer.training import extensions, StandardUpdater
+from chainer.training import extensions, StandardUpdater, triggers
 from tensorboardX import SummaryWriter
 
 import triplet
@@ -35,6 +37,38 @@ def get_trainer(updater, evaluator, epochs):
     return trainer
 
 
+def evaluate_triplet(model, test_triplet, test_labels, batch_size, writer, xp):
+    embeddings = get_embeddings(model.predictor, test_triplet, batch_size, xp)
+    # draw_embeddings_cluster_with_images("cluster_final.png", embeddings, test_labels, test_triplet,
+    #                                     draw_images=False)
+    # draw_embeddings_cluster_with_images("cluster_final_with_images.png", embeddings, test_labels, test_triplet,
+    #                                     draw_images=True)
+
+    # Add embeddings to projector
+    test_triplet = 1 - test_triplet  # colours are inverted for model - "re-invert" for better visualisation
+    create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
+
+    metrics = evaluate_embeddings(embeddings, xp.asarray(test_labels))
+
+    return metrics
+
+
+def evaluate_ce(model, test, batch_size, label_map, xp):
+    test_samples, test_labels = zip(*test)
+
+    predictions = []
+    for i in range(math.ceil(len(test_samples) / batch_size)):
+        predictions.append(model.predict(xp.asarray(list(test_samples[i * batch_size:(i + 1) * batch_size]))))
+    predictions = xp.concatenate(predictions)
+    if xp == cuda.cupy:
+        predictions = xp.asnumpy(predictions)
+    metrics = get_metrics(predictions, test_labels, list(label_map.keys()))
+
+    inv_label_map = {v: k for k, v in label_map.items()}
+    metrics["predicted_distribution"] = {inv_label_map[k]: v for k, v in metrics["predicted_distribution"].items()}
+    return metrics
+
+
 def main():
     # TODO: cleanup and move to conf
     parser = argparse.ArgumentParser()
@@ -51,6 +85,7 @@ def main():
     parser.add_argument("--pretrained", type=str, help="path to pretrained model")
     parser.add_argument("-ce", "--ce-classifier", action="store_true",
                         help="use a cross entropy classifier instead of triplet loss")
+    parser.add_argument("-eo", "--eval-only", type=str, help="only evaluate the given model")
     args = parser.parse_args()
 
     ###################### INIT ############################
@@ -84,7 +119,10 @@ def main():
 
     # Init tensorboard writer
     if args.log_dir is not None:
-        log_dir = f"runs/{args.log_dir}_ep{new_epochs}"
+        if args.eval_only is not None:
+            log_dir = f"runs/{args.log_dir}_eval"
+        else:
+            log_dir = f"runs/{args.log_dir}_ep{new_epochs}"
         if os.path.exists(log_dir):
             user_input = input("Log dir not empty. Clear log dir? (y/N)")
             if user_input == "y":
@@ -112,7 +150,7 @@ def main():
         train_iter = SerialIterator(train, batch_size, repeat=True, shuffle=True)
         test_iter = SerialIterator(test, batch_size, repeat=False, shuffle=True)
 
-        model = CrossEntropyClassifier(base_model, len(classes), xp)
+        model = CrossEntropyClassifier(base_model, len(classes))
 
         if int(gpu) >= 0:
             backend.get_device(gpu).use()
@@ -124,7 +162,6 @@ def main():
 
         updater = StandardUpdater(train_iter, optimizer, device=gpu)
         evaluator = CEEvaluator(test_iter, model, device=gpu)
-
     else:
         if args.lossless:
             model = LosslessClassifier(base_model)
@@ -151,47 +188,43 @@ def main():
         updater = triplet.Updater(train_iter, optimizer, device=gpu)
         evaluator = triplet.Evaluator(test_iter, model, device=gpu)
 
-    trainer = get_trainer(updater, evaluator, epochs)
-    if plot_loss:
-        trainer.extend(extensions.PlotReport(["main/loss", "validation/main/loss"], "epoch",
-                                             file_name=f"{model_name}_loss.png"))
+    if args.eval_only is None:
+        trainer = get_trainer(updater, evaluator, epochs)
+        if plot_loss:
+            trainer.extend(extensions.PlotReport(["main/loss", "validation/main/loss"], "epoch",
+                                                 file_name=f"{model_name}_loss.png"))
+        trainer.extend(extensions.snapshot(serializers.save_npz, filename= model_name + "_full_{0.updater.epoch:03d}.npz",
+                                           target=model))
+        best_model_name = model_name + "_full_best.npz"
+        trainer.extend(extensions.snapshot(serializers.save_npz, filename=best_model_name, target=model),
+                       trigger=triggers.BestValueTrigger("validation/main/loss", lambda best, new: new < best))
 
-    if not args.ce_classifier:
-        cluster_dir = os.path.join(writer.logdir, "cluster_imgs")
-        os.makedirs(cluster_dir, exist_ok=True)
-        trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, batch_size, xp, cluster_dir),
-                       trigger=(1, "epoch"))
+        if not args.ce_classifier:
+            cluster_dir = os.path.join(writer.logdir, "cluster_imgs")
+            os.makedirs(cluster_dir, exist_ok=True)
+            trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, batch_size, xp, cluster_dir),
+                           trigger=(1, "epoch"))
 
-    # trainer.extend(VisualBackprop(test_triplet[0], test_labels[0], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
-    # trainer.extend(VisualBackprop(test_triplet[2], test_labels[2], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
+        # trainer.extend(VisualBackprop(test_triplet[0], test_labels[0], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
+        # trainer.extend(VisualBackprop(test_triplet[2], test_labels[2], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
 
-    trainer.run()
+        trainer.run()
 
-    serializers.save_npz(os.path.join(writer.logdir, model_name + "_base.npz"), base_model)
+        # serializers.save_npz(os.path.join(writer.logdir, model_name + "_base.npz"), base_model)
+
+        for file in glob.glob(f"result/{model_name}*"):
+            shutil.move(file, writer.logdir)
+        best_model_path = os.path.join(writer.logdir, best_model_name)
+    else:
+        best_model_path = args.eval_only
 
     #################### Evaluation ########################################
 
+    serializers.load_npz(best_model_path, model)
     if args.ce_classifier:
-        test_samples, test_labels = zip(*test)
-        predictions = model.predict(xp.asarray(list(test_samples)))
-        if xp == cuda.cupy:
-            predictions = xp.asnumpy(predictions)
-        metrics = get_metrics(predictions, test_labels, list(label_map.keys()))
-
-        inv_label_map = {v: k for k, v in label_map.items()}
-        metrics["predicted_distribution"] = {inv_label_map[k]: v for k, v in metrics["predicted_distribution"].items()}
+        metrics = evaluate_ce(model, test, batch_size, label_map, xp)
     else:
-        embeddings = get_embeddings(base_model, test_triplet, batch_size, xp)
-        # draw_embeddings_cluster_with_images("cluster_final.png", embeddings, test_labels, test_triplet,
-        #                                     draw_images=False)
-        # draw_embeddings_cluster_with_images("cluster_final_with_images.png", embeddings, test_labels, test_triplet,
-        #                                     draw_images=True)
-
-        # Add embeddings to projector
-        test_triplet = 1 - test_triplet  # colours are inverted for model - "re-invert" for better visualisation
-        create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
-
-        metrics = evaluate_embeddings(embeddings, xp.asarray(test_labels))
+        metrics = evaluate_triplet(model, test_triplet, test_labels, batch_size, writer, xp)
 
     with open(os.path.join(writer.logdir, "metrics.log"), "w") as log_file:
         json.dump(metrics, log_file, indent=4)

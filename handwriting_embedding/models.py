@@ -65,20 +65,21 @@ class StandardClassifier(Chain):
 
 
 class CrossEntropyClassifier(Chain):
-    def __init__(self, predictor, num_classes, xp):
+    def __init__(self, predictor, num_classes):
         super(CrossEntropyClassifier, self).__init__(predictor=predictor)
         self.linear = L.Linear(None, num_classes).to_gpu()
-        self._xp = xp
 
     def __call__(self, x, y):
-        h = self.linear(x)
+        h = self.predictor(x)
+        h = self.linear(h)
         loss = F.softmax_cross_entropy(h, y)
         report({'loss': loss}, self)
         return loss
 
     def predict(self, x):
-        h = self.linear(x)
-        prediction = self._xp.argmax(F.softmax(h).array, axis=1)
+        h = self.predictor(x)
+        h = self.linear(h)
+        prediction = self.xp.argmax(F.softmax(h).array, axis=1)
         return prediction
 
 

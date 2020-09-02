@@ -24,8 +24,6 @@ class CEEvaluator(Evaluator):
             observation = {}
             with reporter_module.report_scope(observation), chainer.no_backprop_mode():
                 x, y = zip(*batches)
-                # in_vars = [variable.Variable(batch) for batch in batches]
-                # in_vars = [(variable.Variable(sample), label) for sample, label in batches]
                 x_v = variable.Variable(np.asarray(x))
                 x_v.to_gpu()
                 y_v = variable.Variable(np.asarray(y))
