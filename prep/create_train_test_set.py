@@ -8,9 +8,9 @@ json_paths = ["ganwriting_generated_words_nums_dates_18k.json", "alpha_num_gener
               "gw_baseline_replicated.json", "nums_generated_20k.json", "plzs_generated_20k.json"]
 dataset_dir = "../handwriting_embedding/datasets"
 tar_dir = "datasets/tars"
-new_dataset_name = "full_ds_nums_dates_text_only"
+new_dataset_name = "full_ds_nums_text_only"
 
-allowed_classes = ["num", "date", "text"]
+allowed_classes = ["num", "text"]
 print(f"Using only camples of classes: {', '.join(allowed_classes)}")
 
 dataset = {}
@@ -52,7 +52,9 @@ with open(test_set_path, "w") as test_out_file:
 tar_filename = os.path.join(tar_dir, new_dataset_name + "_train_test.tar.bz2")
 image_files = [sample["path"] for sample in test + train]
 with tarfile.open(tar_filename, "w:bz2") as tar:
-    for filename in image_files:
+    for i, filename in enumerate(image_files):
+        if (i + 1) % (len(image_files) // 10) == 0:
+            print(f"Adding image {i}/{len(image_files)}")
         tar.add(os.path.join(dataset_dir, filename), arcname=filename)
     tar.add(train_set_path, arcname=os.path.basename(train_set_path))
     tar.add(test_set_path, arcname=os.path.basename(test_set_path))

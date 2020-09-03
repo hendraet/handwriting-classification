@@ -67,7 +67,9 @@ class StandardClassifier(Chain):
 class CrossEntropyClassifier(Chain):
     def __init__(self, predictor, num_classes):
         super(CrossEntropyClassifier, self).__init__(predictor=predictor)
-        self.linear = L.Linear(None, num_classes).to_gpu()
+
+        with self.init_scope():
+            self.linear = L.Linear(None, num_classes)
 
     def __call__(self, x, y):
         h = self.predictor(x)

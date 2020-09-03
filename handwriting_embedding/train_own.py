@@ -48,8 +48,7 @@ def evaluate_triplet(model, test_triplet, test_labels, batch_size, writer, xp):
     test_triplet = 1 - test_triplet  # colours are inverted for model - "re-invert" for better visualisation
     create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
 
-    metrics = evaluate_embeddings(embeddings, xp.asarray(test_labels))
-
+    metrics = evaluate_embeddings(embeddings, test_labels)
     return metrics
 
 
@@ -105,17 +104,17 @@ def main():
 
     xp = cuda.cupy if int(gpu) >= 0 else np
 
-    model_name = f"res{str(resnet_size)}_{args.model_suffix}_ep{epochs}"
+    model_name = f"res{str(resnet_size)}_{args.model_suffix}"
 
     # Load pretrained model if needed
     new_epochs = epochs
     pretrained_model_name = args.pretrained
-    if pretrained_model_name:
-        serializers.load_npz(os.path.join(pretrained_model_name), base_model)
-        pretrained_epochs = int(pretrained_model_name.split("_")[-2][2:])
-        new_epochs = str(pretrained_epochs + int(epochs))
-        model_name = f"res{str(resnet_size)}_{args.model_suffix}_ep{new_epochs}"
-        print("Models loaded")
+    # if pretrained_model_name:
+    #     serializers.load_npz(os.path.join(pretrained_model_name), base_model)
+    #     pretrained_epochs = int(pretrained_model_name.split("_")[-2][2:])
+    #     new_epochs = str(pretrained_epochs + int(epochs))
+    #     model_name = f"res{str(resnet_size)}_{args.model_suffix}_ep{new_epochs}"
+    #     print("Models loaded")
 
     # Init tensorboard writer
     if args.log_dir is not None:
