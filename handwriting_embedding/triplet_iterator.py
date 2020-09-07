@@ -20,8 +20,9 @@ def queue_worker(index_queue, batch_queue, dataset, xp):
 
 
 class TripletIterator(Iterator):
-    def __init__(self, dataset, batch_size, repeat=False, xp=np):
+    def __init__(self, dataset, ground_truth, batch_size, repeat=False, xp=np):
         self.dataset = dataset
+        self.ground_truth = ground_truth
         self.len_data = len(dataset)
         self.batch_size = batch_size
         self.repeat = repeat
@@ -58,7 +59,9 @@ class TripletIterator(Iterator):
 
         # simulate progress for ProgressBar extension
         self.current_position += 3 * self.batch_size
-        return self.batches.get(timeout=2)
+        indices = self.batches.get(timeout=2)
+        samples = tuple(self.xp.asarray([self.ground_truth[int(idx)][0] for idx in indices[i]]) for i in range(len(indices)))
+        return samples
 
     next = __next__
 

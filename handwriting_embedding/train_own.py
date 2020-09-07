@@ -81,7 +81,6 @@ def main():
     parser.add_argument("-ld", "--log-dir", type=str, help="name of tensorboard logdir")
     parser.add_argument("-ll", "--lossless", action="store_true",
                         help="use lossless triplet loss instead of standard one")
-    parser.add_argument("--pretrained", type=str, help="path to pretrained model")
     parser.add_argument("-ce", "--ce-classifier", action="store_true",
                         help="use a cross entropy classifier instead of triplet loss")
     parser.add_argument("-eo", "--eval-only", type=str, help="only evaluate the given model")
@@ -106,22 +105,12 @@ def main():
 
     model_name = f"res{str(resnet_size)}_{args.model_suffix}"
 
-    # Load pretrained model if needed
-    new_epochs = epochs
-    pretrained_model_name = args.pretrained
-    # if pretrained_model_name:
-    #     serializers.load_npz(os.path.join(pretrained_model_name), base_model)
-    #     pretrained_epochs = int(pretrained_model_name.split("_")[-2][2:])
-    #     new_epochs = str(pretrained_epochs + int(epochs))
-    #     model_name = f"res{str(resnet_size)}_{args.model_suffix}_ep{new_epochs}"
-    #     print("Models loaded")
-
     # Init tensorboard writer
     if args.log_dir is not None:
         if args.eval_only is not None:
             log_dir = f"runs/{args.log_dir}_eval"
         else:
-            log_dir = f"runs/{args.log_dir}_ep{new_epochs}"
+            log_dir = f"runs/{args.log_dir}_ep{epochs}"
         if os.path.exists(log_dir):
             user_input = input("Log dir not empty. Clear log dir? (y/N)")
             if user_input == "y":
@@ -134,8 +123,7 @@ def main():
         log_file.write(f"{' '.join(sys.argv[1:])}\n")
     shutil.copy(args.config, writer.logdir)
 
-    print("PRETRAINED:", str(pretrained_model_name), "MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size),
-          "EPOCHS:", str(epochs))
+    print("MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size), "EPOCHS:", str(epochs))
 
     #################### Train and Save Model ########################################
     if args.ce_classifier:
@@ -167,12 +155,18 @@ def main():
         else:
             model = StandardClassifier(base_model)
 
-        train_triplet, train_labels, test_triplet, test_labels = load_triplet_dataset(args)
-        train_iter = TripletIterator(train_triplet,
+        train_indices, train_set, test_indices, test_set = load_triplet_dataset(args)
+        test_triplet, test_labels = zip(*test_set)
+        test_triplet = np.asarray(list(test_triplet))
+        test_labels = np.asarray(test_labels)
+
+        train_iter = TripletIterator(train_indices,
+                                     train_set,
                                      batch_size=batch_size,
                                      repeat=True,
                                      xp=xp)
-        test_iter = TripletIterator(test_triplet,
+        test_iter = TripletIterator(test_indices,
+                                    test_set,
                                     batch_size=batch_size,
                                     xp=xp)
 
@@ -208,8 +202,6 @@ def main():
         # trainer.extend(VisualBackprop(test_triplet[2], test_labels[2], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
 
         trainer.run()
-
-        # serializers.save_npz(os.path.join(writer.logdir, model_name + "_base.npz"), base_model)
 
         for file in glob.glob(f"result/{model_name}*"):
             shutil.move(file, writer.logdir)

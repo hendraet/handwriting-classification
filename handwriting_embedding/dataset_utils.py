@@ -50,17 +50,20 @@ def generate_triplet_part(dataset, is_negative, classes):
 
 
 def generate_triplet(dataset, classes):
-    anchors = generate_triplet_part(dataset, False, classes)
-    positives = generate_triplet_part(dataset, False, classes)
-    negatives = generate_triplet_part(dataset, True, classes)
+    num_samples = len(dataset)
+    ds_range = range(num_samples)
 
-    datasets = [anchors, positives, negatives]
-    merged = [None] * 3 * len(anchors)
-    for i in range(0, 3):
-        merged[i::3] = datasets[i]
+    indices = []
+    for anchor_idx in ds_range:
+        for positive_idx in ds_range:
+            if anchor_idx == positive_idx or dataset[anchor_idx][1] != dataset[positive_idx][1]:
+                continue
+            for negative_idx in ds_range:
+                if dataset[anchor_idx][1] == dataset[negative_idx][1]:
+                    continue
+                indices.extend([anchor_idx, positive_idx, negative_idx])
 
-    triplet, labels = zip(*merged)
-    return np.asarray(triplet), np.asarray(labels)
+    return np.asarray(indices)
 
 
 def load_dataset(args):
@@ -74,12 +77,10 @@ def load_dataset(args):
 def load_triplet_dataset(args):
     train, test, classes = load_dataset(args)
 
-    train_triplet, train_labels = generate_triplet(train, classes)
-    assert not [i for (i, label) in enumerate(train_labels[0::3]) if label == train_labels[i * 3 + 2]]
+    train_indices = generate_triplet(train, classes)
     print("Train done.")
 
-    test_triplet, test_labels = generate_triplet(test, classes)
-    assert not [i for (i, label) in enumerate(test_labels[0::3]) if label == test_labels[i * 3 + 2]]
+    test_indices = generate_triplet(test, classes)
     print("Test done.")
 
-    return train_triplet, train_labels, test_triplet, test_labels
+    return train_indices, train, test_indices, test
