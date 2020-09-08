@@ -155,17 +155,17 @@ def main():
         else:
             model = StandardClassifier(base_model)
 
-        train_indices, train_set, test_indices, test_set = load_triplet_dataset(args)
+        train_indice_ranges, train_set, test_indice_ranges, test_set = load_triplet_dataset(args)
         test_triplet, test_labels = zip(*test_set)
         test_triplet = np.asarray(list(test_triplet))
         test_labels = np.asarray(test_labels)
 
-        train_iter = TripletIterator(train_indices,
+        train_iter = TripletIterator(train_indice_ranges,
                                      train_set,
                                      batch_size=batch_size,
                                      repeat=True,
                                      xp=xp)
-        test_iter = TripletIterator(test_indices,
+        test_iter = TripletIterator(test_indice_ranges,
                                     test_set,
                                     batch_size=batch_size,
                                     xp=xp)

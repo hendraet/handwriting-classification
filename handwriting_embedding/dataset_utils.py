@@ -27,6 +27,7 @@ def parse_json(dataset_dir, json_path):
             dataset.append((img, sample["type"]))
             classes.add(sample["type"])
 
+    dataset = sorted(dataset, key=lambda x: x[1])
     return dataset, classes
 
 
@@ -76,11 +77,12 @@ def load_dataset(args):
 
 def load_triplet_dataset(args):
     train, test, classes = load_dataset(args)
+    train_indice_ranges = get_indice_ranges(classes, train)
+    test_indice_ranges = get_indice_ranges(classes, test)
+    return train_indice_ranges, train, test_indice_ranges, test
 
-    train_indices = generate_triplet(train, classes)
-    print("Train done.")
 
-    test_indices = generate_triplet(test, classes)
-    print("Test done.")
-
-    return train_indices, train, test_indices, test
+def get_indice_ranges(classes, train):
+    _, labels = zip(*train)
+    indice_ranges = [(labels.index(cl), len(labels) - list(reversed(labels)).index(cl)) for cl in classes]
+    return indice_ranges
