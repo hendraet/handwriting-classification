@@ -82,4 +82,4 @@ def load_triplet_dataset(args):
     assert not [i for (i, label) in enumerate(test_labels[0::3]) if label == test_labels[i * 3 + 2]]
     print("Test done.")
 
-    return train_triplet, train_labels, train_strings, test_triplet, test_labels, train_strings
+    return train_triplet, train_labels, train_strings, test_triplet, test_labels, test_strings

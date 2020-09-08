@@ -15,18 +15,31 @@ import matplotlib.pyplot as plt
 
 def get_embeddings_per_class(classes, embeddings, labels):
     samples = {}
+
+    strings_filename = 'strings_full_ds_baseline.pickle'
+    with open(strings_filename, 'rb') as f:
+        saved_strings = list(pickle.load(f))
+
     for target_class in classes:
-        samples[target_class] = np.asarray([emb for emb, label in zip(embeddings, labels) if label == target_class])
+        samples[target_class] = np.asarray([(emb, string) for emb, label, string in zip(embeddings, labels, saved_strings) if label == target_class])
     return samples
 
 
 def get_dists(samples, same_class, split_diff_dists=False):
     class_dists = {}
-    for target_class, embeddings in samples.items():
+    for target_class, emb_str_tuples in samples.items():
+        embeddings, strings = zip(*emb_str_tuples)
         if same_class:
             upper_tri_indices = np.triu_indices(len(embeddings), k=1)
             dists = cdist(embeddings, embeddings, 'sqeuclidean')[upper_tri_indices]
             class_dists[target_class] = dists
+
+            full_dists = cdist(embeddings, embeddings, 'sqeuclidean')
+            zero_idx = np.where(full_dists == 0.0)
+            ut_pairs = list(zip(*upper_tri_indices))
+            zero_idx_pairs = list(zip(*zero_idx))
+            same_pairs = [(strings[x], strings[y], embeddings[x], embeddings[y]) for x, y in zero_idx_pairs if (x, y) in ut_pairs]
+            print()
         else:
             if split_diff_dists:
                 class_dists[target_class] = {}
@@ -207,11 +220,13 @@ def calc_llr(embeddings, labels, split_diff_dists=False):
 
 
 def main():
-    embeddings_filename = 'embeddings_5classes_9k.npy'
+    # embeddings_filename = 'embeddings_5classes_9k.npy'
+    embeddings_filename = 'embeddings_full_ds_baseline.npy'
     saved_embeddings = np.load(embeddings_filename)
     print("Embeddings loaded")
 
-    labels_filename = 'labels_5classes_9k.pickle'
+    # labels_filename = 'labels_5classes_9k.pickle'
+    labels_filename = 'labels_full_ds_baseline.pickle'
     with open(labels_filename, 'rb') as f:
         saved_labels = list(pickle.load(f))
     print("Labels loaded")
