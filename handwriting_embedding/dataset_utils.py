@@ -24,7 +24,7 @@ def parse_json(dataset_dir, json_path):
         json_content = json.load(json_file)
         for sample in json_content:
             img = image_to_array(os.path.join(dataset_dir, sample['path']), invert_colours=True)
-            dataset.append((img, sample["type"]))
+            dataset.append((img, sample["type"], sample["string"]))
             classes.add(sample["type"])
 
     return dataset, classes
@@ -59,8 +59,8 @@ def generate_triplet(dataset, classes):
     for i in range(0, 3):
         merged[i::3] = datasets[i]
 
-    triplet, labels = zip(*merged)
-    return np.asarray(triplet), np.asarray(labels)
+    triplet, labels, strings = zip(*merged)
+    return np.asarray(triplet), np.asarray(labels), np.asarray(strings)
 
 
 def load_dataset(args):
@@ -74,12 +74,12 @@ def load_dataset(args):
 def load_triplet_dataset(args):
     train, test, classes = load_dataset(args)
 
-    train_triplet, train_labels = generate_triplet(train, classes)
+    train_triplet, train_labels, train_strings = generate_triplet(train, classes)
     assert not [i for (i, label) in enumerate(train_labels[0::3]) if label == train_labels[i * 3 + 2]]
     print("Train done.")
 
-    test_triplet, test_labels = generate_triplet(test, classes)
+    test_triplet, test_labels, test_strings = generate_triplet(test, classes)
     assert not [i for (i, label) in enumerate(test_labels[0::3]) if label == test_labels[i * 3 + 2]]
     print("Test done.")
 
-    return train_triplet, train_labels, test_triplet, test_labels
+    return train_triplet, train_labels, train_strings, test_triplet, test_labels, train_strings

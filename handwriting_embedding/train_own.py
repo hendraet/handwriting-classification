@@ -167,7 +167,7 @@ def main():
         else:
             model = StandardClassifier(base_model)
 
-        train_triplet, train_labels, test_triplet, test_labels = load_triplet_dataset(args)
+        train_triplet, train_labels, train_strings, test_triplet, test_labels, test_strings = load_triplet_dataset(args)
         train_iter = TripletIterator(train_triplet,
                                      batch_size=batch_size,
                                      repeat=True,
