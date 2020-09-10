@@ -4,6 +4,7 @@ import numpy as np
 import queue
 import threading
 
+import random
 from chainer.dataset.iterator import Iterator
 
 
@@ -20,14 +21,14 @@ def queue_worker(index_queue, batch_queue, dataset, xp):
 
 
 class TripletIterator(Iterator):
-    # def __init__(self, dataset, ground_truth, batch_size, repeat=False, xp=np):
-    def __init__(self, indice_ranges, ground_truth, batch_size, repeat=False, xp=np):
+    def __init__(self, indice_ranges, ground_truth, batch_size, scale_factor=100, repeat=False, xp=np):
         self.indice_ranges = indice_ranges
-        self.init_queues(0)  # Only needed for length calculation
+        self.p_max = int(np.sqrt(scale_factor))
+        self.n_max = int(np.sqrt(scale_factor))
         self.current_idx = (None, None, None)
 
         self.ground_truth = ground_truth
-        self.len_data = 3 * len(ground_truth) * (len(self.init_a_queue) - 1) * (len(self.init_n_queue))
+        self.len_data = 3 * len(ground_truth) * self.p_max * self.n_max
         self.batch_size = batch_size
         self.repeat = repeat
         self.xp = xp
@@ -48,11 +49,19 @@ class TripletIterator(Iterator):
             self.init_n_queue.extend((reversed(list(range(self.indice_ranges[i][0], self.indice_ranges[i][1])))))
         assert len(self.init_n_queue) == len(self.init_a_queue) * (len(self.indice_ranges) - 1)
 
+        # limit sample size
+        self.init_p_queue = random.sample(self.init_p_queue, self.p_max + 1)  # +1 because first element gets popped anyways
+        self.init_n_queue = random.sample(self.init_n_queue, self.n_max)
+
         self.a_queue = self.init_a_queue.copy()
         self.p_queue = self.init_p_queue.copy()
         self.n_queue = self.init_n_queue.copy()
 
-        self.p_queue.pop()  # avoid same sample for anchor and positive
+        # avoid same sample for anchor and positive
+        if self.a_queue[-1] in self.p_queue:
+            self.p_queue.remove(self.a_queue[-1])
+        else:
+            self.p_queue.pop(-1)
 
     def increase_idx(self):
         # Init
@@ -87,6 +96,7 @@ class TripletIterator(Iterator):
                     else:
                         return False
 
+        assert new_idx[0] != new_idx[1]
         self.current_idx = new_idx
         return True
 
