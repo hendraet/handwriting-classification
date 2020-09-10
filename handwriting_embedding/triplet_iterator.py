@@ -23,11 +23,11 @@ class TripletIterator(Iterator):
     # def __init__(self, dataset, ground_truth, batch_size, repeat=False, xp=np):
     def __init__(self, indice_ranges, ground_truth, batch_size, repeat=False, xp=np):
         self.indice_ranges = indice_ranges
-        self.init_queues(0)
-        self.current_idx = None
+        self.init_queues(0)  # Only needed for length calculation
+        self.current_idx = (None, None, None)
 
         self.ground_truth = ground_truth
-        self.len_data = len(ground_truth) * (len(self.init_a_queue) - 1) * (len(self.init_n_queue))
+        self.len_data = 3 * len(ground_truth) * (len(self.init_a_queue) - 1) * (len(self.init_n_queue))
         self.batch_size = batch_size
         self.repeat = repeat
         self.xp = xp
@@ -42,11 +42,11 @@ class TripletIterator(Iterator):
         self.init_p_queue = list(reversed(list(range(self.indice_ranges[self.current_a_range_idx][0],
                                                      self.indice_ranges[self.current_a_range_idx][1]))))
         self.init_n_queue = []
-        idx = list(range(3))
+        idx = list(range(len(self.indice_ranges)))
         idx.remove(self.current_a_range_idx)
         for i in idx:
             self.init_n_queue.extend((reversed(list(range(self.indice_ranges[i][0], self.indice_ranges[i][1])))))
-        assert len(self.init_n_queue)  == len(self.init_a_queue) * 2
+        assert len(self.init_n_queue) == len(self.init_a_queue) * (len(self.indice_ranges) - 1)
 
         self.a_queue = self.init_a_queue.copy()
         self.p_queue = self.init_p_queue.copy()
@@ -56,7 +56,8 @@ class TripletIterator(Iterator):
 
     def increase_idx(self):
         # Init
-        if self.current_idx is None:
+        if self.current_idx == (None, None, None):
+            self.init_queues(0)
             self.current_idx = (self.a_queue.pop(), self.p_queue.pop(), self.n_queue.pop())
             return True
 
@@ -94,9 +95,11 @@ class TripletIterator(Iterator):
             self.current_position = 0
             self.epoch += 1
 
-            self.init_queues(0)
             if not self.repeat:
                 raise StopIteration
+
+            self.current_idx = (None, None, None)
+            self.increase_idx()
 
         # simulate progress for ProgressBar extension
         self.current_position += 3 * self.batch_size
