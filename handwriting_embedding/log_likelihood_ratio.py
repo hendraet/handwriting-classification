@@ -1,17 +1,22 @@
 import itertools
+import os
 import pickle
 
 import matplotlib
 import numpy as np
 import random
+import seaborn as seaborn
 from scipy import stats
 from scipy.spatial.distance import cdist
 from sklearn import metrics
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
-matplotlib.use("TkAgg")
-# matplotlib.use('Agg')
+from classification import get_metrics, format_metrics
+
+# matplotlib.use("TkAgg")
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
+seaborn.set()
 
 def get_embeddings_per_class(classes, embeddings, labels):
     samples = {}
@@ -26,7 +31,7 @@ def get_dists(samples, same_class, split_diff_dists=False):
         if same_class:
             upper_tri_indices = np.triu_indices(len(embeddings), k=1)
             dists = cdist(embeddings, embeddings, 'sqeuclidean')[upper_tri_indices]
-            class_dists[target_class] = dists
+            class_dists[target_class] = dists[dists != 0.0]
         else:
             if split_diff_dists:
                 class_dists[target_class] = {}
@@ -92,17 +97,15 @@ def get_prediction(test_sample, test_samples, classes, same_class_dist_hists, ot
     return predicted_class
 
 
-def calc_llr(embeddings, labels, split_diff_dists=False):
-    classes = set(labels)
-    samples = get_embeddings_per_class(classes, embeddings, labels)
+def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split_diff_dists=False, log_dir=""):
+    classes = set(train_labels)
+    samples = get_embeddings_per_class(classes, train_embeddings, train_labels)
     # contains all intra-class dists, e.g. the dist between two different text embeddings
     same_class_dists = get_dists(samples, same_class=True)
     # contains the dists from one class (key) to all other classes, e.g. dist text - date, text - num
     diff_class_dists = get_dists(samples, same_class=False, split_diff_dists=split_diff_dists)
 
-    # TODO: scores needed for C_llr calc
-    # hist_bins = 1000  # TODO: find or calculate a good value
-    hist_bins = 1000  # TODO: find or calculate a good value
+    hist_bins = 100  # TODO: find or calculate a good value
 
     if split_diff_dists:
         max_dist_same = max([max(dists) for dists in same_class_dists.values()])
@@ -130,64 +133,109 @@ def calc_llr(embeddings, labels, split_diff_dists=False):
                                                                 density=True)[0]
     print("Hists created")
 
-    # same = np.asarray([v for k, v in same_class_dist_hists.items()])
-    # padding = np.zeros((1, hist_bins))
-    # diff = np.asarray([v for k, v in other_class_dist_hists.items()])
-    # merged = np.concatenate((same, padding, diff))
-    # merged_flat = np.concatenate((np.expand_dims(same_class_dist_hist_flat, 0), np.expand_dims(diff_class_dist_hist_flat, 0)))
+    ################ Prediction ##############################################################################
+    test_samples = list(zip(test_labels, test_embeddings))
 
-    # TODO: get actual test samples
-    test_samples = []
-    for cl in classes:
-        for i in range(100):  # TODO: increase
-            test_samples.append((cl, samples[cl][i]))
-
-    correct_prediction = {}
+    actual_labels = []
+    predicted_labels = []
     for actual_class, test_sample in test_samples:
-        # print(f"=======================================Actual class: {actual_class}===================================")
         predicted_class = get_prediction(test_sample, test_samples, classes, same_class_dist_hists,
                                          other_class_dist_hists, hist_edges)
-        # print(f"Actual class: {actual_class}, predicted class: {predicted_class} ({highest_llr[1]})")
-        if actual_class not in correct_prediction:
-            correct_prediction[actual_class] = []
-        correct_prediction[actual_class].append(1 if actual_class == predicted_class else 0)
+        actual_labels.append(actual_class)
+        predicted_labels.append(predicted_class)
 
-    for cl, predictions in correct_prediction.items():
-        acc = np.mean(np.asarray(predictions))
-        print(f"Acc for {cl}: {acc}")
+    model_metrics = get_metrics(predicted_labels, actual_labels, list(set(actual_labels)))
+    print(format_metrics(model_metrics))
 
+    ################ Plotting ##############################################################################
+    colour_palette = seaborn.color_palette("cubehelix", 6)
     colour_dict = {
-        "text": "b",
-        "plz": "g",
-        "alpha_num": "y",
-        "date": "c",
-        "num": "m",
+        # "text": "b",
+        # "plz": "g",
+        # "alpha_num": "y",
+        # "date": "c",
+        # "num": "m",
+        "text": colour_palette[0],
+        "plz": colour_palette[1],
+        "alpha_num": colour_palette[2],
+        "date": colour_palette[3],
+        "num": colour_palette[4]
     }
 
-    fig, axs = plt.subplots(len(classes), 2)
-    plt.subplots_adjust(hspace=0.6)
-    for row, cl in zip(axs, classes):
-        row[0].set_title(str(cl))
-        center = (hist_edges[:-1] + hist_edges[1:]) / 2
-        width = 1.0 * (hist_edges[1] - hist_edges[0])
+    label_dict = {
+        "text": "Words",
+        "plz": "Zip Codes",
+        "alpha_num": "Alpha Numeric Strings",
+        "date": "Dates",
+        "num": "Numbers",
+    }
+
+    classes = [c for c in classes]
+
+    ### Hist ###
+    for cl in classes:
+        plt.title(f"Distance Histogram for {label_dict[cl]}")
+        plt.xlabel('Distance')
+        plt.ylabel('Likelihood')
+
+        # center = (hist_edges[:-1] + hist_edges[1:]) / 2
+        # width = 1.0 * (hist_edges[1] - hist_edges[0])
         xx = np.linspace(0, max_dist, hist_bins)
 
         same_hist = same_class_dist_hists[cl]
         # row.bar(center, same_hist, align='center', width=width)
         same_hist_dist = stats.rv_histogram((same_hist, hist_edges))
-        row[0].plot(xx, same_hist_dist.pdf(xx), "r")
+        plt.plot(xx, same_hist_dist.pdf(xx), color=colour_palette[3], label="Intra-class Distance")
 
         if split_diff_dists:
             for o_cl in other_class_dist_hists[cl].keys():
                 other_hist = other_class_dist_hists[cl][o_cl]
                 other_hist_dist = stats.rv_histogram((other_hist, hist_edges))
-                row[0].plot(xx, other_hist_dist.pdf(xx), colour_dict[o_cl])
+                plt.plot(xx, other_hist_dist.pdf(xx), colour_dict[o_cl])
         else:
             other_hist = other_class_dist_hists[cl]
             # row.bar(center, other_hist, align='center', width=width)
             other_hist_dist = stats.rv_histogram((other_hist, hist_edges))
-            row[0].plot(xx, other_hist_dist.pdf(xx), "b")
+            plt.plot(xx, other_hist_dist.pdf(xx), color=colour_palette[0], label="Inter-class Distance")
 
+        plt.legend(loc='best')
+        plt.savefig(os.path.join(log_dir, f"hist_{cl}.png"))
+        plt.clf()
+
+        # Single ROC curves
+        # plt.title(f"ROC Curve for {label_dict[cl]}")
+        # plt.xlabel('False positive rate')
+        # plt.ylabel('True positive rate')
+        #
+        # lw = 2
+        # plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+        #
+        # y_true = np.zeros((len(test_samples),))
+        # y_score = np.zeros((len(test_samples),))
+        # for i, (actual_class, test_sample) in enumerate(test_samples):
+        #     dist = get_mean_dist_for_class(cl, test_sample, test_samples)
+        #     y_score[i] = dist
+        #     y_true[i] = 0 if actual_class == cl else 1
+        #
+        # y_score = y_score / max_dist
+        # fpr, tpr, thresholds = metrics.roc_curve(y_true, y_score)
+        # roc_auc = metrics.auc(fpr, tpr)
+        #
+        # plt.plot(fpr, tpr, color="darkorange", lw=lw, label=f'{label_dict[cl]} (AUC = {roc_auc:0.2f})' )
+        #
+        # plt.legend(loc='lower right')
+        # plt.savefig(os.path.join(log_dir, f"roc_{cl}.png"))
+        # plt.clf()
+
+    ### Combined ROC ###
+    plt.title(f"ROC Curves")
+    plt.xlabel('False positive rate')
+    plt.ylabel('True positive rate')
+
+    lw = 2
+    plt.plot([0, 1], [0, 1], color='grey', lw=lw, linestyle='--')
+
+    for cl in classes:
         y_true = np.zeros((len(test_samples),))
         y_score = np.zeros((len(test_samples),))
         for i, (actual_class, test_sample) in enumerate(test_samples):
@@ -199,11 +247,11 @@ def calc_llr(embeddings, labels, split_diff_dists=False):
         fpr, tpr, thresholds = metrics.roc_curve(y_true, y_score)
         roc_auc = metrics.auc(fpr, tpr)
 
-        lw = 2
-        row[1].plot(fpr, tpr, color='darkorange', lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
-        row[1].plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+        plt.plot(fpr, tpr, color=colour_dict[cl], lw=lw, label=f'{label_dict[cl]} (AUC = {roc_auc:0.2f})' )
 
-    plt.show()
+    plt.legend(loc='best')
+    plt.savefig(os.path.join(log_dir, f"roc.png"))
+    plt.clf()
 
 
 def main():
@@ -216,6 +264,11 @@ def main():
         saved_labels = list(pickle.load(f))
     print("Labels loaded")
 
+    test_labels = saved_labels[-1000:]
+    test_embeddings = saved_embeddings[-1000:]
+    saved_labels = saved_labels[:-1000]
+    saved_embeddings = saved_embeddings[:-1000]
+
     # num_per_class = 10
     # reps = 100
     # num_samples = reps * num_per_class
@@ -227,7 +280,7 @@ def main():
     # saved_embeddings = np.repeat(init, 512, axis=1)
     # saved_labels = sorted(["1", "2", "3", "4", "5"] * reps)
 
-    calc_llr(saved_embeddings, saved_labels)
+    calc_llr(saved_embeddings, saved_labels, test_embeddings, test_labels, log_dir="result/llrs")
 
 
 if __name__ == '__main__':
