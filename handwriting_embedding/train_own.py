@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 
 import triplet
 from ce_evaluator import CEEvaluator
-from classification import evaluate_embeddings, get_metrics
+from classification import evaluate_saved_embeddings, get_metrics, evaluate_embeddings
 from dataset_utils import load_triplet_dataset, load_dataset
 from eval_utils import create_tensorboard_embeddings
 from eval_utils import get_embeddings
@@ -37,8 +37,8 @@ def get_trainer(updater, evaluator, epochs):
     return trainer
 
 
-def evaluate_triplet(model, test_triplet, test_labels, batch_size, writer, xp):
-    embeddings = get_embeddings(model.predictor, test_triplet, batch_size, xp)
+def evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labels, batch_size, writer, xp):
+    test_embeddings = get_embeddings(model.predictor, test_triplet, batch_size, xp)
     # draw_embeddings_cluster_with_images("cluster_final.png", embeddings, test_labels, test_triplet,
     #                                     draw_images=False)
     # draw_embeddings_cluster_with_images("cluster_final_with_images.png", embeddings, test_labels, test_triplet,
@@ -46,9 +46,10 @@ def evaluate_triplet(model, test_triplet, test_labels, batch_size, writer, xp):
 
     # Add embeddings to projector
     test_triplet = 1 - test_triplet  # colours are inverted for model - "re-invert" for better visualisation
-    create_tensorboard_embeddings(test_triplet, test_labels, embeddings, writer)
+    create_tensorboard_embeddings(test_triplet, test_labels, test_embeddings, writer)
 
-    metrics = evaluate_embeddings(embeddings, test_labels)
+    train_embeddings = get_embeddings(model.predictor, train_triplet, batch_size, xp)
+    metrics = evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels)
     return metrics
 
 
@@ -223,13 +224,14 @@ def main():
     if args.ce_classifier:
         metrics = evaluate_ce(model, test, batch_size, label_map, xp)
     else:
-        metrics = evaluate_triplet(model, test_triplet, test_labels, batch_size, writer, xp)
+        metrics = evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labels, batch_size, writer, xp)
 
     with open(os.path.join(writer.logdir, "metrics.log"), "w") as log_file:
         json.dump(metrics, log_file, indent=4)
 
     print("Done")
-    sys.exit(0)
+    # sys.exit(0)
+    os._exit(0)
 
 
 if __name__ == "__main__":

@@ -138,8 +138,8 @@ def format_metrics(metrics):
     return formatted_metrics
 
 
-def evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embeddings, test_labels, verbose=True):
-    classes = list(set(saved_labels))
+def evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels, verbose=True):
+    classes = list(set(support_labels))
     # predicted_labels = classify_embeddings(test_embeddings, support_labels, support_embeddings, classes,
     #                                        actual_labels=test_labels)
     predicted_labels = classify_embeddings(test_embeddings, support_labels, support_embeddings, classes)
@@ -167,7 +167,7 @@ def get_metrics(predicted_labels, test_labels, classes):
         "w_f_score": w_f_score,
         "support": support.tolist(),
         "predicted_distribution": Counter(predicted_labels),
-        "classes": classes
+        "classes": sorted(classes)
     }
     return metrics
 
@@ -184,17 +184,43 @@ def run_experiment(saved_embeddings, saved_labels):
                                                                                         ratio=ratio)
         # blah(support_embeddings, support_labels)
         weighted_fscores.append([])
-        for _ in range(25):
-            w_f_score = evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embeddings, test_labels,
-                                         verbose=False)
-            weighted_fscores[i].append(w_f_score)
+        for _ in range(1000):
+            metrics = evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels,
+                                       verbose=False)
+            weighted_fscores[i].append(metrics["w_f_score"])
     ax.boxplot(weighted_fscores, labels=[int(num_samples * r) for r in support_ratios])
     plt.show()
 
 
-def evaluate_embeddings(saved_embeddings, saved_labels):
+def evaluate_saved_embeddings(saved_embeddings, saved_labels):
     support_embeddings, support_labels, test_embeddings, test_labels = get_datasets(saved_embeddings, saved_labels)
-    return evaluate_dataset(saved_labels, support_embeddings, support_labels, test_embeddings, test_labels)
+    return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels)
+
+
+def evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels):
+    # num_classes = len(list(set(train_labels)))
+    # ratio = num_samples_per_class / len(train_labels)
+    # support_embeddings, support_labels, _, _ = get_datasets(train_embeddings, train_labels, ratio=ratio)
+
+    num_support_samples = 25
+    support_samples = {}
+    for emb, label in zip(train_embeddings, train_labels):
+        if label not in support_samples:
+            support_samples[label] = []
+        if len(support_samples[label]) < num_support_samples:
+            support_samples[label].append(emb)
+        else:
+            continue
+
+    flat_support_samples = []
+    for label, embedding_list in support_samples.items():
+        assert len(embedding_list) == num_support_samples
+        for emb in embedding_list:
+            flat_support_samples.append((emb, label))
+    support_embeddings, support_labels = zip(*flat_support_samples)
+    support_embeddings = np.asarray(support_embeddings)
+
+    return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels)
 
 
 def main():
@@ -204,15 +230,17 @@ def main():
                              "support embedding.")
     args = parser.parse_args()
 
-    embeddings_filename = 'embeddings_5classes_9k.npy'
-    labels_filename = 'labels_5classes_9k.pickle'
+    embeddings_filename = 'embeddings_full_ds_baseline.npy'
+    labels_filename = 'labels_full_ds_baseline.pickle'
     saved_embeddings = np.load(embeddings_filename)
     with open(labels_filename, 'rb') as f:
         saved_labels = list(pickle.load(f))
 
     if args.single_run:
-        evaluate_embeddings(saved_embeddings, saved_labels)
+        evaluate_saved_embeddings(saved_embeddings, saved_labels)
     else:
+        matplotlib.use("TkAgg")
+        import matplotlib.pyplot as plt
         run_experiment(saved_embeddings, saved_labels)
 
 
