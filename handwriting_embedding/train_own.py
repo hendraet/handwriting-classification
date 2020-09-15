@@ -3,6 +3,7 @@ import configparser
 import glob
 import json
 import math
+import statistics
 import sys
 
 import matplotlib
@@ -16,11 +17,12 @@ from tensorboardX import SummaryWriter
 
 import triplet
 from ce_evaluator import CEEvaluator
-from classification import evaluate_saved_embeddings, get_metrics, evaluate_embeddings
+from classification import get_metrics, evaluate_embeddings
 from dataset_utils import load_triplet_dataset, load_dataset
 from eval_utils import create_tensorboard_embeddings
 from eval_utils import get_embeddings
 from extensions.cluster_plotter import ClusterPlotter
+from log_likelihood_ratio import calc_llr
 from models import PooledResNet
 from models import StandardClassifier, LosslessClassifier, CrossEntropyClassifier
 from triplet_iterator import TripletIterator
@@ -49,8 +51,27 @@ def evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labe
     create_tensorboard_embeddings(test_triplet, test_labels, test_embeddings, writer)
 
     train_embeddings = get_embeddings(model.predictor, train_triplet, batch_size, xp)
-    metrics = evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels)
-    return metrics
+    all_metrics = []
+    num_runs = 101
+    for i in range(num_runs):
+        metrics = evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels)
+        all_metrics.append(metrics)
+
+    all_f_scores = [metrics["w_f_score"] for metrics in all_metrics]
+    median_idx = all_f_scores.index(statistics.median(all_f_scores))
+
+    final_metrics = {}
+    for k in all_metrics[0].keys():
+        final_metrics[k] = [metrics[k] for metrics in all_metrics][median_idx]
+
+    return final_metrics
+
+
+def evaluate_triplet_with_llr(train_triplets, train_labels, test_triplets, test_labels, log_dir, model, batch_size, xp):
+    train_embeddings = get_embeddings(model.predictor, train_triplets, batch_size, xp)
+    test_embeddings = get_embeddings(model.predictor, test_triplets, batch_size, xp)
+
+    return calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, log_dir=log_dir)
 
 
 def evaluate_ce(model, test, batch_size, label_map, xp):
@@ -86,6 +107,8 @@ def main():
     parser.add_argument("-ce", "--ce-classifier", action="store_true",
                         help="use a cross entropy classifier instead of triplet loss")
     parser.add_argument("-eo", "--eval-only", type=str, help="only evaluate the given model")
+    parser.add_argument("-llr", action="store_true",
+                        help="Evaluate triplets with log-likehood-ratios instead of kmeans/knn")
     args = parser.parse_args()
 
     ###################### INIT ############################
@@ -107,22 +130,12 @@ def main():
 
     model_name = f"res{str(resnet_size)}_{args.model_suffix}"
 
-    # Load pretrained model if needed
-    new_epochs = epochs
-    pretrained_model_name = args.pretrained
-    # if pretrained_model_name:
-    #     serializers.load_npz(os.path.join(pretrained_model_name), base_model)
-    #     pretrained_epochs = int(pretrained_model_name.split("_")[-2][2:])
-    #     new_epochs = str(pretrained_epochs + int(epochs))
-    #     model_name = f"res{str(resnet_size)}_{args.model_suffix}_ep{new_epochs}"
-    #     print("Models loaded")
-
     # Init tensorboard writer
     if args.log_dir is not None:
         if args.eval_only is not None:
             log_dir = f"runs/{args.log_dir}_eval"
         else:
-            log_dir = f"runs/{args.log_dir}_ep{new_epochs}"
+            log_dir = f"runs/{args.log_dir}_ep{epochs}"
         if os.path.exists(log_dir):
             user_input = input("Log dir not empty. Clear log dir? (y/N)")
             if user_input == "y":
@@ -130,12 +143,13 @@ def main():
         writer = SummaryWriter(log_dir)
     else:
         writer = SummaryWriter()
+        log_dir = writer.logdir
 
     with open(os.path.join(writer.logdir, "args.log"), "w") as log_file:
         log_file.write(f"{' '.join(sys.argv[1:])}\n")
     shutil.copy(args.config, writer.logdir)
 
-    print("PRETRAINED:", str(pretrained_model_name), "MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size),
+    print("MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size),
           "EPOCHS:", str(epochs))
 
     #################### Train and Save Model ########################################
@@ -223,6 +237,9 @@ def main():
     serializers.load_npz(best_model_path, model)
     if args.ce_classifier:
         metrics = evaluate_ce(model, test, batch_size, label_map, xp)
+    elif args.llr:
+        metrics = evaluate_triplet_with_llr(train_triplet, train_labels, test_triplet, test_labels, log_dir, model,
+                                            batch_size, xp)
     else:
         metrics = evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labels, batch_size, writer, xp)
 

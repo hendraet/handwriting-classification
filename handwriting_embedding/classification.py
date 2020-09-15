@@ -1,5 +1,6 @@
 import argparse
 import pickle
+import warnings
 from collections import Counter
 
 import copy
@@ -69,9 +70,9 @@ def classify_embeddings(embeddings, support_labels, support_embeddings, possible
         "All possible classes should have the same amount of support labels."
 
     min_num_of_support_labels = min(support_label_count.values())
-    if min_num_of_support_labels < 5:
-        print("There are few support samples (<5), which could lead to inaccurate results. Consider adding more "
-              "samples.")
+    # if min_num_of_support_labels < 5:
+    #     print("There are few support samples (<5), which could lead to inaccurate results. Consider adding more "
+    #           "samples.")
 
     # ideally finds the centroid for each class in test dataset
     num_centroids = len(possible_classes)
@@ -154,9 +155,11 @@ def evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_l
 
 def get_metrics(predicted_labels, test_labels, classes):
     accuracy = accuracy_score(test_labels, predicted_labels)
-    precision, recall, f_score, support = precision_recall_fscore_support(test_labels, predicted_labels)
-    w_precision, w_recall, w_f_score, _ = precision_recall_fscore_support(test_labels, predicted_labels,
-                                                                          average="weighted")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        precision, recall, f_score, support = precision_recall_fscore_support(test_labels, predicted_labels)
+        w_precision, w_recall, w_f_score, _ = precision_recall_fscore_support(test_labels, predicted_labels,
+                                                                              average="weighted")
     metrics = {
         "accuracy": accuracy,
         "precision": precision.tolist(),
@@ -172,37 +175,7 @@ def get_metrics(predicted_labels, test_labels, classes):
     return metrics
 
 
-def run_experiment(saved_embeddings, saved_labels):
-    num_samples = len(saved_labels)
-    fig, ax = plt.subplots()
-
-    weighted_fscores = []
-    support_ratios = [0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 0.7]
-    for i, ratio in enumerate(support_ratios):
-        print(f"Ratio: {ratio}")
-        support_embeddings, support_labels, test_embeddings, test_labels = get_datasets(saved_embeddings, saved_labels,
-                                                                                        ratio=ratio)
-        # blah(support_embeddings, support_labels)
-        weighted_fscores.append([])
-        for _ in range(1000):
-            metrics = evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels,
-                                       verbose=False)
-            weighted_fscores[i].append(metrics["w_f_score"])
-    ax.boxplot(weighted_fscores, labels=[int(num_samples * r) for r in support_ratios])
-    plt.show()
-
-
-def evaluate_saved_embeddings(saved_embeddings, saved_labels):
-    support_embeddings, support_labels, test_embeddings, test_labels = get_datasets(saved_embeddings, saved_labels)
-    return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels)
-
-
-def evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels):
-    # num_classes = len(list(set(train_labels)))
-    # ratio = num_samples_per_class / len(train_labels)
-    # support_embeddings, support_labels, _, _ = get_datasets(train_embeddings, train_labels, ratio=ratio)
-
-    num_support_samples = 25
+def get_num_of_support_samples(train_embeddings, train_labels, num_support_samples):
     support_samples = {}
     for emb, label in zip(train_embeddings, train_labels):
         if label not in support_samples:
@@ -219,6 +192,52 @@ def evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_la
             flat_support_samples.append((emb, label))
     support_embeddings, support_labels = zip(*flat_support_samples)
     support_embeddings = np.asarray(support_embeddings)
+
+    return support_embeddings, support_labels
+
+
+def run_experiment(saved_embeddings, saved_labels):
+    test_labels = saved_labels[-1000:]
+    test_embeddings = saved_embeddings[-1000:]
+    train_labels = saved_labels[:-1000]
+    train_embeddings = saved_embeddings[:-1000]
+
+    fig, ax = plt.subplots()
+
+    num_runs = 1000
+    weighted_fscores = []
+    support_sample_sizes = [25, 27, 30, 32, 35, 37, 40, 42, 45, 47, 50, 55]
+    for i, num_support_samples in enumerate(support_sample_sizes):
+        print(f"Ratio: {num_support_samples}")
+        support_embeddings, support_labels = get_num_of_support_samples(train_embeddings, train_labels,
+                                                                        num_support_samples)
+        weighted_fscores.append([])
+        for j in range(num_runs):
+            if (j + 1) % 10 == 0:
+                print(f"Run {j+1} of {num_runs}")
+            metrics = evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels,
+                                       verbose=False)
+            weighted_fscores[i].append(metrics["w_f_score"])
+
+    with open("k_eval_data.pickle", "wb") as pf:
+        pickle.dump(weighted_fscores, pf)
+
+    ax.boxplot(weighted_fscores, labels=support_sample_sizes)
+    plt.savefig("k_eval_boxplot.png")
+
+
+def evaluate_saved_embeddings(saved_embeddings, saved_labels):
+    support_embeddings, support_labels, test_embeddings, test_labels = get_datasets(saved_embeddings, saved_labels)
+    return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels)
+
+
+def evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels):
+    # num_classes = len(list(set(train_labels)))
+    # ratio = num_samples_per_class / len(train_labels)
+    # support_embeddings, support_labels, _, _ = get_datasets(train_embeddings, train_labels, ratio=ratio)
+
+    num_support_samples = 25
+    support_embeddings, support_labels = get_num_of_support_samples(train_embeddings, train_labels, num_support_samples)
 
     return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels)
 
@@ -239,8 +258,6 @@ def main():
     if args.single_run:
         evaluate_saved_embeddings(saved_embeddings, saved_labels)
     else:
-        matplotlib.use("TkAgg")
-        import matplotlib.pyplot as plt
         run_experiment(saved_embeddings, saved_labels)
 
 
