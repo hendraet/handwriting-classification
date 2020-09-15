@@ -17,6 +17,19 @@ from classification import get_metrics, format_metrics
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 seaborn.set()
+SMALL_SIZE = 14
+MEDIUM_SIZE = 18
+LEGEND_SIZE = 16
+BIGGER_SIZE = 24
+
+plt.rc('font', size=BIGGER_SIZE)  # controls default text sizes
+plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('legend', fontsize=LEGEND_SIZE)  # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)
+
 
 def get_embeddings_per_class(classes, embeddings, labels):
     samples = {}
@@ -148,16 +161,20 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
     print(format_metrics(model_metrics))
 
     ################ Plotting ##############################################################################
-    colour_palette = seaborn.color_palette("cubehelix", 6)
+    colour_palette = [
+        (215, 25, 28),      # red
+        (253, 174, 97),     # orange
+        (255, 255, 191),    # yellow
+        (171, 221, 164),    # green
+        (43, 131, 186)      # blue
+    ]
+    colour_palette = [(colour[0] / 255, colour[1] / 255, colour[2] / 255) for colour in colour_palette]
+
     colour_dict = {
-        # "text": "b",
-        # "plz": "g",
-        # "alpha_num": "y",
-        # "date": "c",
-        # "num": "m",
         "text": colour_palette[0],
         "plz": colour_palette[1],
         "alpha_num": colour_palette[2],
+        "alphanum": colour_palette[2],
         "date": colour_palette[3],
         "num": colour_palette[4]
     }
@@ -166,11 +183,13 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
         "text": "Words",
         "plz": "Zip Codes",
         "alpha_num": "Alpha Numeric Strings",
+        "alphanum": "Alpha Numeric Strings",
         "date": "Dates",
         "num": "Numbers",
     }
 
     classes = [c for c in classes]
+    fig = plt.figure(figsize=[12.8, 9.6])
 
     ### Hist ###
     for cl in classes:
@@ -185,7 +204,7 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
         same_hist = same_class_dist_hists[cl]
         # row.bar(center, same_hist, align='center', width=width)
         same_hist_dist = stats.rv_histogram((same_hist, hist_edges))
-        plt.plot(xx, same_hist_dist.pdf(xx), color=colour_palette[3], label="Intra-class Distance")
+        plt.plot(xx, same_hist_dist.pdf(xx), color=colour_palette[4], label="Intra-class Distance")
 
         if split_diff_dists:
             for o_cl in other_class_dist_hists[cl].keys():
@@ -229,8 +248,8 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
 
     ### Combined ROC ###
     plt.title(f"ROC Curves")
-    plt.xlabel('False positive rate')
-    plt.ylabel('True positive rate')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
 
     lw = 2
     plt.plot([0, 1], [0, 1], color='grey', lw=lw, linestyle='--')
@@ -249,10 +268,11 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
 
         plt.plot(fpr, tpr, color=colour_dict[cl], lw=lw, label=f'{label_dict[cl]} (AUC = {roc_auc:0.2f})' )
 
-    plt.legend(loc='best')
+    plt.legend(loc='lower right')
     plt.savefig(os.path.join(log_dir, f"roc.png"))
     plt.clf()
 
+    return model_metrics
 
 def main():
     embeddings_filename = 'embeddings_5classes_9k.npy'
@@ -264,10 +284,15 @@ def main():
         saved_labels = list(pickle.load(f))
     print("Labels loaded")
 
-    test_labels = saved_labels[-1000:]
-    test_embeddings = saved_embeddings[-1000:]
-    saved_labels = saved_labels[:-1000]
-    saved_embeddings = saved_embeddings[:-1000]
+    # test_labels = saved_labels[-1000:]
+    # test_embeddings = saved_embeddings[-1000:]
+    # saved_labels = saved_labels[:-1000]
+    # saved_embeddings = saved_embeddings[:-1000]
+
+    test_labels = saved_labels[-100:]
+    test_embeddings = saved_embeddings[-100:]
+    saved_labels = saved_labels[:400]
+    saved_embeddings = saved_embeddings[:400]
 
     # num_per_class = 10
     # reps = 100
