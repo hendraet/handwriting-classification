@@ -30,6 +30,33 @@ plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
 plt.rc('legend', fontsize=LEGEND_SIZE)  # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)
 
+colour_palette = [
+    (215, 25, 28),  # red
+    (253, 174, 97),  # orange
+    (255, 255, 191),  # yellow
+    (171, 221, 164),  # green
+    (43, 131, 186)  # blue
+]
+colour_palette = [(colour[0] / 255, colour[1] / 255, colour[2] / 255) for colour in colour_palette]
+
+colour_dict = {
+    "text": colour_palette[0],
+    "plz": colour_palette[1],
+    "alpha_num": colour_palette[2],
+    "alphanum": colour_palette[2],
+    "date": colour_palette[3],
+    "num": colour_palette[4]
+}
+
+label_dict = {
+    "text": "Words",
+    "plz": "Zip Codes",
+    "alpha_num": "Alpha Numeric Strings",
+    "alphanum": "Alpha Numeric Strings",
+    "date": "Dates",
+    "num": "Numbers",
+}
+
 
 def get_embeddings_per_class(classes, embeddings, labels):
     samples = {}
@@ -161,39 +188,12 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
     print(format_metrics(model_metrics))
 
     ################ Plotting ##############################################################################
-    colour_palette = [
-        (215, 25, 28),      # red
-        (253, 174, 97),     # orange
-        (255, 255, 191),    # yellow
-        (171, 221, 164),    # green
-        (43, 131, 186)      # blue
-    ]
-    colour_palette = [(colour[0] / 255, colour[1] / 255, colour[2] / 255) for colour in colour_palette]
-
-    colour_dict = {
-        "text": colour_palette[0],
-        "plz": colour_palette[1],
-        "alpha_num": colour_palette[2],
-        "alphanum": colour_palette[2],
-        "date": colour_palette[3],
-        "num": colour_palette[4]
-    }
-
-    label_dict = {
-        "text": "Words",
-        "plz": "Zip Codes",
-        "alpha_num": "Alpha Numeric Strings",
-        "alphanum": "Alpha Numeric Strings",
-        "date": "Dates",
-        "num": "Numbers",
-    }
-
     classes = [c for c in classes]
     fig = plt.figure(figsize=[12.8, 9.6])
 
     ### Hist ###
     for cl in classes:
-        plt.title(f"Distance Histogram for {label_dict[cl]}")
+        # plt.title(f"Distance Histogram for {label_dict[cl]}")
         plt.xlabel('Distance')
         plt.ylabel('Likelihood')
 
@@ -204,7 +204,7 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
         same_hist = same_class_dist_hists[cl]
         # row.bar(center, same_hist, align='center', width=width)
         same_hist_dist = stats.rv_histogram((same_hist, hist_edges))
-        plt.plot(xx, same_hist_dist.pdf(xx), color=colour_palette[4], label="Intra-class Distance")
+        plt.plot(xx, same_hist_dist.pdf(xx), color=colour_palette[4], label="Intra-class Distance Distribution")
 
         if split_diff_dists:
             for o_cl in other_class_dist_hists[cl].keys():
@@ -215,7 +215,7 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
             other_hist = other_class_dist_hists[cl]
             # row.bar(center, other_hist, align='center', width=width)
             other_hist_dist = stats.rv_histogram((other_hist, hist_edges))
-            plt.plot(xx, other_hist_dist.pdf(xx), color=colour_palette[0], label="Inter-class Distance")
+            plt.plot(xx, other_hist_dist.pdf(xx), color=colour_palette[0], label="Inter-class Distance Distribution")
 
         plt.legend(loc='best')
         plt.savefig(os.path.join(log_dir, f"hist_{cl}.png"))
@@ -247,7 +247,7 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
         # plt.clf()
 
     ### Combined ROC ###
-    plt.title(f"ROC Curves")
+    # plt.title(f"ROC Curves")
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
 
@@ -268,7 +268,10 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
 
         plt.plot(fpr, tpr, color=colour_dict[cl], lw=lw, label=f'{label_dict[cl]} (AUC = {roc_auc:0.2f})' )
 
-    plt.legend(loc='lower right')
+    handles, labels = plt.gca().get_legend_handles_labels()
+    labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+    plt.legend(handles, labels, loc='lower right')
+    # plt.legend(loc='lower right')
     plt.savefig(os.path.join(log_dir, f"roc.png"))
     plt.clf()
 

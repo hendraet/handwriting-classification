@@ -3,37 +3,46 @@ import json
 import os
 
 
-def format_metrics_for_single_exp(metrics, class_dict):
-    table_begin = "\\begin{tabular}{ |c c c c| }\n"
-    table_end = "\\end{tabular}\n"
+def format_metrics_for_single_exp(metrics, class_dict, run_dir):
+    table_begin = "\\begin{table}[h]\n"
+    table_begin += "\\centering\n"
+    table_begin += "\\begin{tabular}{@{}cccc@{}}\n"
+    tabular_end = "\\end{tabular}\n"
+    table_end = "\\end{table}\n"
 
     latex_string = table_begin
-    latex_string += "\t\\hline\n"
-    latex_string += "\tClass & Precision (\\%) & Recall (\\%) & F1 Score \\\\\n"
+    latex_string += "\\toprule\n"
+    latex_string += "Class & Precision (\\%) & Recall (\\%) & F1 Score \\\\\n"
 
-    latex_string += "\t\\hline\n"
+    latex_string += "\\midrule\n"
     for precision, recall, f_score, cl in zip(metrics["precision"], metrics["recall"], metrics["f_score"],
                                              sorted(metrics["classes"])):
-        latex_string += f"\t{class_dict[cl]} & ${precision * 100:.02f}$ & ${recall * 100:.02f}$ & ${f_score:.04f}$ \\\\\n"
+        latex_string += f"{class_dict[cl]} & {precision * 100:.02f} & {recall * 100:.02f} & {f_score:.04f} \\\\\n"
 
-    latex_string += "\t\\hline\n"
-    latex_string += f"\tAverage & ${metrics['w_precision'] * 100:.02f}$ & ${metrics['w_recall'] * 100:.02f}$ & ${metrics['w_f_score']:.04f}$ \\\\\n"
+    latex_string += "\\hline\n"
+    latex_string += f"Average & {metrics['w_precision'] * 100:.02f} & {metrics['w_recall'] * 100:.02f} & {metrics['w_f_score']:.04f} \\\\\n"
 
-    latex_string += "\t\\hline\n"
+    latex_string += "\\bottomrule\n"
+    latex_string += tabular_end
+    latex_string += "\\caption{}\n"
+    latex_string += f"\\label{{table:{run_dir}}}\n"
     latex_string += table_end
 
     return latex_string
 
 
 def format_metrics_for_exp_group(exp_group, relevant_metrics):
-    table_begin = "\\begin{tabular}{ |c c c c c| }\n"
-    table_end = "\\end{tabular}\n"
+    table_begin = "\\begin{table}[h]\n"
+    table_begin += "\\centering\n"
+    table_begin += "\\begin{tabular}{@{}ccccc@{}}\n"
+    tabular_end = "\\end{tabular}\n"
+    table_end = "\\end{table}\n"
 
     latex_string = table_begin
-    latex_string += "\t\\hline\n"
+    latex_string += "\\toprule\n"
 
-    latex_string += "\tExperiment & Accuracy (\\%) & Precision (\\%) & Recall (\\%) & F1 Score \\\\\n"
-    latex_string += "\t\\hline\n"
+    latex_string += "Experiment & Accuracy (\\%) & Precision (\\%) & Recall (\\%) & F1 Score \\\\\n"
+    latex_string += "\\midrule\n"
 
     for exp, metrics in zip(exp_group, relevant_metrics):
         acc = metrics["accuracy"]
@@ -42,19 +51,22 @@ def format_metrics_for_exp_group(exp_group, relevant_metrics):
         f_score = metrics["w_f_score"]
 
         if "_ce" in exp:
-            exp_label = "Cross-entropy Loss Classifier"
+            exp_label = "CE"
         elif "_llr" in exp:
-            exp_label = "Triplet Loss (Log-likelihood Ratio)"
+            exp_label = "LLR"
         elif "full_ds_nums_dates_only" == exp:
-            exp_label = "Evaluated on Numbers and Dates"
+            exp_label = "Baseline"
         elif "full_ds_nums_dates_only_plus_text" == exp:
-            exp_label = "Evaluated on Numbers, Dates and Words"
+            exp_label = "Extra Class"
         else:
-            exp_label = "Triplet Loss (k-means + kNN)"
+            exp_label = "Base"
 
-        latex_string += f"\t{exp_label} & ${acc * 100:.02f}$ & ${precision * 100:.02f}$ & ${recall * 100:.02f}$ & ${f_score:.04f}$ \\\\\n"
+        latex_string += f"{exp_label} & {acc * 100:.02f} & {precision * 100:.02f} & {recall * 100:.02f} & {f_score:.04f} \\\\\n"
 
-    latex_string += "\t\\hline\n"
+    latex_string += "\\bottomrule\n"
+    latex_string += tabular_end
+    latex_string += "\\caption{}\n"
+    latex_string += f"\\label{{table:}}\n"
     latex_string += table_end
 
     return latex_string
@@ -90,7 +102,7 @@ def main():
         all_metrics[run_dir] = metrics
 
         if run_dir in plot_dirs:
-            latex_string = format_metrics_for_single_exp(metrics, class_dict)
+            latex_string = format_metrics_for_single_exp(metrics, class_dict, run_dir)
             single_exp_tables += run_dir.replace("_", " ") + "\\\\\n" + latex_string + "\n"
 
     print(single_exp_tables)

@@ -1,5 +1,6 @@
 import matplotlib
 import numpy as np
+import seaborn
 from chainer import training
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.decomposition import PCA
@@ -8,6 +9,52 @@ from eval_utils import get_embeddings
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+seaborn.set()
+SMALL_SIZE = 14
+MEDIUM_SIZE = 18
+LEGEND_SIZE = 16
+BIGGER_SIZE = 24
+
+plt.rc('font', size=BIGGER_SIZE)  # controls default text sizes
+plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('legend', fontsize=LEGEND_SIZE)  # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)
+
+colour_palette = [
+    "#d7191c",
+    "#fdae61",
+    "#ffffbf",
+    "#abdda4",
+    "#2b83ba",
+    # (215, 25, 28),  # red
+    # (253, 174, 97),  # orange
+    # (255, 255, 191),  # yellow
+    # (171, 221, 164),  # green
+    # (43, 131, 186)  # blue
+]
+# colour_palette = [(colour[0] / 255, colour[1] / 255, colour[2] / 255) for colour in colour_palette]
+
+colour_dict = {
+    "text": colour_palette[0],
+    "plz": colour_palette[1],
+    "alpha_num": colour_palette[2],
+    "alphanum": colour_palette[2],
+    "date": colour_palette[3],
+    "num": colour_palette[4]
+}
+
+label_dict = {
+    "text": "Words",
+    "plz": "Zip Codes",
+    "alpha_num": "Alpha Numeric Strings",
+    "alphanum": "Alpha Numeric Strings",
+    "date": "Dates",
+    "num": "Numbers",
+}
 
 
 def remove_black_rect(img):
@@ -22,13 +69,14 @@ def remove_black_rect(img):
         return img
 
 
-def get_pca(embeddings):
+def get_pca(embeddings, components=2):
     X = embeddings
-    pca = PCA(n_components=2)
+    pca = PCA(n_components=components)
     fitted_data = pca.fit_transform(X)
     x = fitted_data[:, 0]
     y = fitted_data[:, 1]
-    return x, y
+    z = fitted_data[:, 2] if components == 3 else None
+    return x, y, z
 
 
 def imscatter(x, y, images, ax=None, zoom=1.0):
@@ -44,10 +92,12 @@ def imscatter(x, y, images, ax=None, zoom=1.0):
 
 
 def draw_embeddings_cluster_with_images(filename, embeddings, labels, dataset, draw_images):
-    x, y = get_pca(embeddings)
+    x, y, z = get_pca(embeddings)
     plt.clf()
+    # fig = plt.figure(figsize=[12.8, 9.6])
 
     fig, ax = plt.subplots()
+    fig.set_size_inches([12.8, 9.6])
     label_set = set(labels)
     for item in label_set:
         indices = []
@@ -62,10 +112,11 @@ def draw_embeddings_cluster_with_images(filename, embeddings, labels, dataset, d
                 cropped_images = [remove_black_rect(image_dataset[idx]) for idx in indices]
                 imscatter(coords[:, 0], coords[:, 1], cropped_images, zoom=0.15, ax=ax)
 
-            ax.scatter(coords[:, 0], coords[:, 1], label=item)
+            ax.scatter(coords[:, 0], coords[:, 1], label=label_dict[item], c=colour_dict[item])
 
     ax.legend(fontsize='xx-small')
-    plt.savefig(filename, dpi=600)
+    # plt.savefig(filename, dpi=600)
+    plt.savefig(filename)
     plt.close(fig)
 
 
