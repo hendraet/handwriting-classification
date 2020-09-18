@@ -95,7 +95,8 @@ def main():
 
     all_metrics = {}
     # TODO: sort run dirs like this?
-    plot_dirs = ['full_ds_baseline', 'full_ds_llr', 'full_ds_ce', 'gw_baseline', 'gw_llr', 'gw_ce']
+    # plot_dirs = ['full_ds_baseline', 'full_ds_llr', 'full_ds_ce', 'gw_baseline', 'gw_llr', 'gw_ce']
+    plot_dirs = run_dirs
     for run_dir in run_dirs:
         with open(os.path.join(root_dir, run_dir, "metrics.log")) as metric_file:
             metrics = json.load(metric_file)
@@ -109,10 +110,10 @@ def main():
 
     exp_groups = [
         ["gw_baseline", "gw_llr", "gw_ce"],
-        ["full_ds_nums_dates_words_only", "full_ds_nums_dates_words_only_ce"],
+        ["full_ds_nums_dates_words_only", "full_ds_nums_dates_words_only_llr", "full_ds_nums_dates_words_only_ce"],
         ["full_ds_baseline", "full_ds_llr", "full_ds_ce"],
         ["wpi_on_full_ds_baseline", "wpi_on_full_ds_baseline_llr", "wpi_on_full_ds_ce"],
-        ["full_ds_nums_dates_only", "full_ds_nums_dates_only_plus_text"]
+        ["full_ds_nums_dates_only", "full_ds_nums_dates_only_llr", "full_ds_nums_dates_only_plus_text", "full_ds_nums_dates_only_plus_text_llr"]
     ]
 
     exp_group_tables = ""
