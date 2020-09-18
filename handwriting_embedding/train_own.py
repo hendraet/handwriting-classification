@@ -21,7 +21,7 @@ from classification import get_metrics, evaluate_embeddings
 from dataset_utils import load_triplet_dataset, load_dataset
 from eval_utils import create_tensorboard_embeddings
 from eval_utils import get_embeddings
-from extensions.cluster_plotter import ClusterPlotter
+from extensions.cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
 from log_likelihood_ratio import calc_llr
 from models import PooledResNet
 from models import StandardClassifier, LosslessClassifier, CrossEntropyClassifier
@@ -41,9 +41,9 @@ def get_trainer(updater, evaluator, epochs):
 
 def evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labels, batch_size, writer, xp):
     test_embeddings = get_embeddings(model.predictor, test_triplet, batch_size, xp)
-    # draw_embeddings_cluster_with_images("cluster_final.png", embeddings, test_labels, test_triplet,
-    #                                     draw_images=False)
-    # draw_embeddings_cluster_with_images("cluster_final_with_images.png", embeddings, test_labels, test_triplet,
+    draw_embeddings_cluster_with_images("cluster_final.png", test_embeddings, test_labels, test_triplet,
+                                        draw_images=False)
+    # draw_embeddings_cluster_with_images("cluster_final_with_images.png", test_embeddings, test_labels, test_triplet,
     #                                     draw_images=True)
 
     # Add embeddings to projector
@@ -57,13 +57,16 @@ def evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labe
         metrics = evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels)
         all_metrics.append(metrics)
 
+    final_metrics = average_all_metrics(all_metrics)
+    return final_metrics
+
+
+def average_all_metrics(all_metrics):
     all_f_scores = [metrics["w_f_score"] for metrics in all_metrics]
     median_idx = all_f_scores.index(statistics.median(all_f_scores))
-
     final_metrics = {}
     for k in all_metrics[0].keys():
         final_metrics[k] = [metrics[k] for metrics in all_metrics][median_idx]
-
     return final_metrics
 
 
@@ -71,7 +74,11 @@ def evaluate_triplet_with_llr(train_triplets, train_labels, test_triplets, test_
     train_embeddings = get_embeddings(model.predictor, train_triplets, batch_size, xp)
     test_embeddings = get_embeddings(model.predictor, test_triplets, batch_size, xp)
 
-    return calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, log_dir=log_dir)
+    llrs = []
+    for i in range(1):
+        llrs.append(calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, log_dir=log_dir))
+
+    return average_all_metrics(llrs)
 
 
 def evaluate_ce(model, test, batch_size, label_map, xp):

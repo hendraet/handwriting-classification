@@ -9,9 +9,11 @@ def main():
     # Orig
     # exp_dirs = ["full_ds_baseline_ep20", "full_ds_nums_dates_only_ep20", "full_ds_nums_dates_only_plus_text_eval",
     #             "full_ds_nums_dates_words_only_ep20", "gw_baseline_ep20", "wpi_on_full_ds_baseline_eval"]
-    exp_dirs = ["wpi_on_full_ds_baseline_eval"]
+    exp_dirs = ["full_ds_baseline_ep20", "full_ds_nums_dates_only_ep20", "full_ds_nums_dates_only_plus_text_eval",
+                "full_ds_nums_dates_words_only_ep20", "gw_baseline_ep20", "wpi_on_full_ds_baseline_eval"]
     root_dir = "final_runs/re"
     exp_dirs = [os.path.join(root_dir, p) for p in exp_dirs]
+    assert False, "script is likely broken, fix first"
 
     use_llr = False
     if use_llr:
