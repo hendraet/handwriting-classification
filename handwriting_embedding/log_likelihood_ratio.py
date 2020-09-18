@@ -1,3 +1,6 @@
+import sys
+
+import copy
 import itertools
 import os
 import pickle
@@ -89,14 +92,19 @@ def get_dists(samples, same_class, split_diff_dists=False):
     return class_dists
 
 
-def get_mean_dist_for_class(second_class, test_sample, samples, k=5):
-    dists = np.zeros((k,))
-    second_class_samples = [sample for sample in samples if sample[0] == second_class]
-    for i in range(k):
-        second_class_sample = random.choice(second_class_samples)[1]
-        dists[i] = cdist(np.expand_dims(test_sample, 0), np.expand_dims(second_class_sample, 0), 'sqeuclidean')
-    mean_dist = np.mean(dists)
+def get_mean_dist_for_class(sample_class, sample, test_samples, same_class):
+    # TODO: use train samples for distance calculation?
+    exp_sample = np.expand_dims(sample, 0)
+    if same_class:
+        same_class_samples = np.asarray([test_sample[1] for test_sample in test_samples
+                                             if test_sample[0] == sample_class
+                                             and not np.array_equal(test_sample[1], sample)])
+        dists = cdist(exp_sample, same_class_samples, 'sqeuclidean')
+    else:
+        other_class_samples = np.asarray([test_sample[1] for test_sample in test_samples if test_sample[0] != sample_class])
+        dists = cdist(exp_sample, other_class_samples, 'sqeuclidean')
 
+    mean_dist = np.mean(dists)
     return mean_dist
 
 
@@ -113,14 +121,19 @@ def get_prediction(test_sample, test_samples, classes, same_class_dist_hists, ot
     log_likelihood_ratios = {}
     for assumed_class in classes:
         # print(f"Assumed class: {assumed_class}")
-        same_dist = get_mean_dist_for_class(assumed_class, test_sample, test_samples)
+        same_dist = get_mean_dist_for_class(assumed_class, test_sample, test_samples, same_class=True)
         same_prob = get_probability_for_dist(same_dist, assumed_class, same_class_dist_hists, hist_edges)
 
         other_class = np.random.choice([c for c in classes if c != assumed_class])  # TODO: for all other classes?
-        other_dist = get_mean_dist_for_class(other_class, test_sample, test_samples)
+        other_dist = get_mean_dist_for_class(assumed_class, test_sample, test_samples, same_class=False)
         other_prob = get_probability_for_dist(other_dist, other_class, other_class_dist_hists, hist_edges)
-        # nan messes up the ordering of the sorted llrs and will therefore be replaced with -inf
-        llr = np.log(same_prob / other_prob) if other_prob != 0.0 else float("-inf")
+
+        # avoid edge cases and division by zero
+        if same_prob == 0.0:
+            same_prob = sys.float_info.min
+        if other_prob == 0.0:
+            other_prob = sys.float_info.min
+        llr = np.log(same_prob / other_prob)
         log_likelihood_ratios[assumed_class] = llr
 
         # print(f"Assumed class: {assumed_class}, Other class: {other_class}")
@@ -258,7 +271,7 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
         y_true = np.zeros((len(test_samples),))
         y_score = np.zeros((len(test_samples),))
         for i, (actual_class, test_sample) in enumerate(test_samples):
-            dist = get_mean_dist_for_class(cl, test_sample, test_samples)
+            dist = get_mean_dist_for_class(cl, test_sample, test_samples, same_class=True)
             y_score[i] = dist
             y_true[i] = 0 if actual_class == cl else 1  # TODO: double check
 
@@ -307,7 +320,10 @@ def main():
     #
     # saved_embeddings = np.repeat(init, 512, axis=1)
     # saved_labels = sorted(["1", "2", "3", "4", "5"] * reps)
-
+    #
+    # test_embeddings = copy.deepcopy(saved_embeddings)
+    # test_labels = copy.deepcopy(saved_labels)
+    #
     calc_llr(saved_embeddings, saved_labels, test_embeddings, test_labels, log_dir="result/llrs")
 
 
