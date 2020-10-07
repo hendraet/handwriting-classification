@@ -44,7 +44,8 @@ colour_dict = {
     "alpha_num": colour_palette[2],
     "alphanum": colour_palette[2],
     "date": colour_palette[3],
-    "num": colour_palette[4]
+    "num": colour_palette[4],
+    "rest": colour_palette[0]
 }
 
 label_dict = {
@@ -54,6 +55,7 @@ label_dict = {
     "alphanum": "Alpha Numeric Strings",
     "date": "Dates",
     "num": "Numbers",
+    "rest": "Others",
 }
 
 

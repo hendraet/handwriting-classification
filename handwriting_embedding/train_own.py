@@ -14,6 +14,7 @@ from chainer import training, cuda, backend, serializers, optimizers
 from chainer.iterators import SerialIterator
 from chainer.training import extensions, StandardUpdater, triggers
 from tensorboardX import SummaryWriter
+from collections import Counter
 
 import triplet
 from ce_evaluator import CEEvaluator
@@ -39,18 +40,18 @@ def get_trainer(updater, evaluator, epochs):
     return trainer
 
 
-def evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labels, batch_size, writer, xp):
-    test_embeddings = get_embeddings(model.predictor, test_triplet, batch_size, xp)
-    draw_embeddings_cluster_with_images("cluster_final.png", test_embeddings, test_labels, test_triplet,
+def evaluate_triplet(model, train_samples, train_labels, test_samples, test_labels, batch_size, writer, xp):
+    test_embeddings = get_embeddings(model.predictor, test_samples, batch_size, xp)
+    draw_embeddings_cluster_with_images("cluster_final.png", test_embeddings, test_labels, test_samples,
                                         draw_images=False)
     # draw_embeddings_cluster_with_images("cluster_final_with_images.png", test_embeddings, test_labels, test_triplet,
     #                                     draw_images=True)
 
     # Add embeddings to projector
-    test_triplet = 1 - test_triplet  # colours are inverted for model - "re-invert" for better visualisation
-    create_tensorboard_embeddings(test_triplet, test_labels, test_embeddings, writer)
+    test_samples = 1 - test_samples  # colours are inverted for model - "re-invert" for better visualisation
+    create_tensorboard_embeddings(test_samples, test_labels, test_embeddings, writer)
 
-    train_embeddings = get_embeddings(model.predictor, train_triplet, batch_size, xp)
+    train_embeddings = get_embeddings(model.predictor, train_samples, batch_size, xp)
     all_metrics = []
     num_runs = 101
     for i in range(num_runs):
@@ -70,9 +71,9 @@ def average_all_metrics(all_metrics):
     return final_metrics
 
 
-def evaluate_triplet_with_llr(train_triplets, train_labels, test_triplets, test_labels, log_dir, model, batch_size, xp):
-    train_embeddings = get_embeddings(model.predictor, train_triplets, batch_size, xp)
-    test_embeddings = get_embeddings(model.predictor, test_triplets, batch_size, xp)
+def evaluate_triplet_with_llr(train_samples, train_labels, test_samples, test_labels, log_dir, model, batch_size, xp):
+    train_embeddings = get_embeddings(model.predictor, train_samples, batch_size, xp)
+    test_embeddings = get_embeddings(model.predictor, test_samples, batch_size, xp)
 
     llrs = []
     for i in range(1):
@@ -169,7 +170,7 @@ def main():
         test = [(sample, label_map[label]) for sample, label in test]
 
         train_iter = SerialIterator(train, batch_size, repeat=True, shuffle=True)
-        test_iter = SerialIterator(test, batch_size, repeat=False, shuffle=True)
+        test_iter = SerialIterator(test, batch_size, repeat=False, shuffle=False)
 
         model = CrossEntropyClassifier(base_model, len(classes))
 
@@ -189,7 +190,7 @@ def main():
         else:
             model = StandardClassifier(base_model)
 
-        train_triplet, train_labels, test_triplet, test_labels = load_triplet_dataset(args)
+        train_triplet, train_samples, train_labels, test_triplet, test_samples, test_labels = load_triplet_dataset(args)
         train_iter = TripletIterator(train_triplet,
                                      batch_size=batch_size,
                                      repeat=True,
@@ -223,7 +224,7 @@ def main():
         if not args.ce_classifier:
             cluster_dir = os.path.join(writer.logdir, "cluster_imgs")
             os.makedirs(cluster_dir, exist_ok=True)
-            trainer.extend(ClusterPlotter(base_model, test_labels, test_triplet, batch_size, xp, cluster_dir),
+            trainer.extend(ClusterPlotter(base_model, test_labels, test_samples, batch_size, xp, cluster_dir),
                            trigger=(1, "epoch"))
 
         # trainer.extend(VisualBackprop(test_triplet[0], test_labels[0], base_model, [["visual_backprop_anchors"]], xp), trigger=(1, "epoch"))
@@ -245,10 +246,10 @@ def main():
     if args.ce_classifier:
         metrics = evaluate_ce(model, test, batch_size, label_map, xp)
     elif args.llr:
-        metrics = evaluate_triplet_with_llr(train_triplet, train_labels, test_triplet, test_labels, log_dir, model,
+        metrics = evaluate_triplet_with_llr(train_samples, train_labels, test_samples, test_labels, log_dir, model,
                                             batch_size, xp)
     else:
-        metrics = evaluate_triplet(model, train_triplet, train_labels, test_triplet, test_labels, batch_size, writer, xp)
+        metrics = evaluate_triplet(model, train_samples, train_labels, test_samples, test_labels, batch_size, writer, xp)
 
     with open(os.path.join(writer.logdir, "metrics.log"), "w") as log_file:
         json.dump(metrics, log_file, indent=4)

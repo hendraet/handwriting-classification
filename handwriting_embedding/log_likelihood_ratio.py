@@ -13,6 +13,7 @@ from scipy import stats
 from scipy.spatial.distance import cdist
 from sklearn import metrics
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from collections import Counter
 
 from classification import get_metrics, format_metrics
 
@@ -20,10 +21,20 @@ from classification import get_metrics, format_metrics
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 seaborn.set()
-SMALL_SIZE = 14
-MEDIUM_SIZE = 18
-LEGEND_SIZE = 16
-BIGGER_SIZE = 24
+
+side_by_side = True
+if side_by_side:
+    SMALL_SIZE = 28
+    MEDIUM_SIZE = 32
+    LEGEND_SIZE = 26
+    BIGGER_SIZE = 36
+    lw = 4
+else:
+    SMALL_SIZE = 14
+    MEDIUM_SIZE = 18
+    LEGEND_SIZE = 16
+    BIGGER_SIZE = 24
+    lw = 2
 
 plt.rc('font', size=BIGGER_SIZE)  # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
@@ -48,7 +59,8 @@ colour_dict = {
     "alpha_num": colour_palette[2],
     "alphanum": colour_palette[2],
     "date": colour_palette[3],
-    "num": colour_palette[4]
+    "num": colour_palette[4],
+    "rest": colour_palette[0]
 }
 
 label_dict = {
@@ -58,6 +70,7 @@ label_dict = {
     "alphanum": "Alpha Numeric Strings",
     "date": "Dates",
     "num": "Numbers",
+    "rest": "Others",
 }
 
 
@@ -217,7 +230,7 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
         same_hist = same_class_dist_hists[cl]
         # row.bar(center, same_hist, align='center', width=width)
         same_hist_dist = stats.rv_histogram((same_hist, hist_edges))
-        plt.plot(xx, same_hist_dist.pdf(xx), color=colour_palette[4], label="Intra-class Distance Distribution")
+        plt.plot(xx, same_hist_dist.pdf(xx), color=colour_palette[4], lw=lw, label="Intra-class Distance Distribution")
 
         if split_diff_dists:
             for o_cl in other_class_dist_hists[cl].keys():
@@ -228,7 +241,7 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
             other_hist = other_class_dist_hists[cl]
             # row.bar(center, other_hist, align='center', width=width)
             other_hist_dist = stats.rv_histogram((other_hist, hist_edges))
-            plt.plot(xx, other_hist_dist.pdf(xx), color=colour_palette[0], label="Inter-class Distance Distribution")
+            plt.plot(xx, other_hist_dist.pdf(xx), color=colour_palette[0], lw=lw, label="Inter-class Distance Distribution")
 
         plt.legend(loc='best')
         plt.savefig(os.path.join(log_dir, f"hist_{cl}.png"))
@@ -264,7 +277,6 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
 
-    lw = 2
     plt.plot([0, 1], [0, 1], color='grey', lw=lw, linestyle='--')
 
     for cl in classes:
