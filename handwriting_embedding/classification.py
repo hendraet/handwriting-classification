@@ -1,4 +1,5 @@
 import argparse
+import json
 import pickle
 import warnings
 from collections import Counter
@@ -9,10 +10,9 @@ import numpy as np
 import random
 from scipy.cluster.vq import kmeans2
 from sklearn.decomposition import PCA
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 
-# matplotlib.use("TkAgg")
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
@@ -70,9 +70,6 @@ def classify_embeddings(embeddings, support_labels, support_embeddings, possible
         "All possible classes should have the same amount of support labels."
 
     min_num_of_support_labels = min(support_label_count.values())
-    # if min_num_of_support_labels < 5:
-    #     print("There are few support samples (<5), which could lead to inaccurate results. Consider adding more "
-    #           "samples.")
 
     # ideally finds the centroid for each class in test dataset
     num_centroids = len(possible_classes)
@@ -128,21 +125,21 @@ def get_datasets(saved_embeddings, saved_labels, ratio=0.1, stable=False):
 
 
 def format_metrics(metrics):
-    formatted_metrics = f"Predicted label distribution: {metrics['predicted_distribution']}\n" \
-                        f"Results:\n" \
+    formatted_metrics = f"Results:\n" \
+                        f"Classes:   {''.join(el.ljust(20) for el in [*sorted(metrics['classes']), ' weighted', 'unweighted'])}\n" \
+                        f"Precision: {''.join(str(el).ljust(20) for el in metrics['precision'])} {metrics['w_precision']} {metrics['uw_precision']}\n" \
+                        f"Recall:    {''.join(str(el).ljust(20) for el in metrics['recall'])} {metrics['w_recall']} {metrics['uw_recall']}\n" \
+                        f"F-score:   {''.join(str(el).ljust(20) for el in metrics['f_score'])} {metrics['w_f_score']} {metrics['uw_f_score']}\n" \
+                        f"Support:   {''.join(str(el).ljust(20) for el in metrics['support'])}\n" \
+                        f"Predicted label distribution: {metrics['predicted_distribution']}\n" \
                         f"Accuracy:  {metrics['accuracy']}\n" \
-                        f"Classes:    {''.join(el.ljust(11) for el in [*sorted(metrics['classes']), ' weighted'])}\n" \
-                        f"Precision: {metrics['precision']} {metrics['w_precision']}\n" \
-                        f"Recall:    {metrics['recall']} {metrics['w_recall']}\n" \
-                        f"F-score:   {metrics['f_score']} {metrics['w_f_score']}\n" \
-                        f"Support:    {''.join(str(el).ljust(11) for el in metrics['support'])}"
+                        f"CM:\n{np.asarray(metrics['confusion_matrix'])}"
+
     return formatted_metrics
 
 
 def evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels, verbose=True):
     classes = list(set(support_labels))
-    # predicted_labels = classify_embeddings(test_embeddings, support_labels, support_embeddings, classes,
-    #                                        actual_labels=test_labels)
     predicted_labels = classify_embeddings(test_embeddings, support_labels, support_embeddings, classes)
 
     metrics = get_metrics(predicted_labels, test_labels, classes)
@@ -160,17 +157,29 @@ def get_metrics(predicted_labels, test_labels, classes):
         precision, recall, f_score, support = precision_recall_fscore_support(test_labels, predicted_labels)
         w_precision, w_recall, w_f_score, _ = precision_recall_fscore_support(test_labels, predicted_labels,
                                                                               average="weighted")
+        uw_precision, uw_recall, uw_f_score, _ = precision_recall_fscore_support(test_labels, predicted_labels,
+                                                                                 average="macro")
+
+    if isinstance(test_labels[0], str):
+        cm = confusion_matrix(test_labels, predicted_labels, labels=sorted(classes))
+    else:
+        cm = confusion_matrix(test_labels, predicted_labels)
+
     metrics = {
         "accuracy": accuracy,
         "precision": precision.tolist(),
         "w_precision": w_precision,
+        "uw_precision": uw_precision,
         "recall": recall.tolist(),
         "w_recall": w_recall,
+        "uw_recall": uw_recall,
         "f_score": f_score.tolist(),
         "w_f_score": w_f_score,
+        "uw_f_score": uw_f_score,
         "support": support.tolist(),
         "predicted_distribution": Counter(predicted_labels),
-        "classes": sorted(classes)
+        "classes": sorted(classes),
+        "confusion_matrix": cm.tolist(),
     }
     return metrics
 
@@ -214,7 +223,7 @@ def run_experiment(saved_embeddings, saved_labels):
         weighted_fscores.append([])
         for j in range(num_runs):
             if (j + 1) % 10 == 0:
-                print(f"Run {j+1} of {num_runs}")
+                print(f"Run {j + 1} of {num_runs}")
             metrics = evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels,
                                        verbose=False)
             weighted_fscores[i].append(metrics["w_f_score"])
@@ -231,15 +240,11 @@ def evaluate_saved_embeddings(saved_embeddings, saved_labels):
     return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels)
 
 
-def evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels):
-    # num_classes = len(list(set(train_labels)))
-    # ratio = num_samples_per_class / len(train_labels)
-    # support_embeddings, support_labels, _, _ = get_datasets(train_embeddings, train_labels, ratio=ratio)
-
+def evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels, verbose=True):
     num_support_samples = 25
     support_embeddings, support_labels = get_num_of_support_samples(train_embeddings, train_labels, num_support_samples)
 
-    return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels)
+    return evaluate_dataset(support_embeddings, support_labels, test_embeddings, test_labels, verbose=verbose)
 
 
 def main():
@@ -256,7 +261,9 @@ def main():
         saved_labels = list(pickle.load(f))
 
     if args.single_run:
-        evaluate_saved_embeddings(saved_embeddings, saved_labels)
+        metrics = evaluate_saved_embeddings(saved_embeddings, saved_labels)
+        with open("metrics_test.log", "w") as log_file:
+            json.dump(metrics, log_file, indent=4)
     else:
         run_experiment(saved_embeddings, saved_labels)
 

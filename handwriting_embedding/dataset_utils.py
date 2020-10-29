@@ -24,7 +24,7 @@ def parse_json(dataset_dir, json_path):
         json_content = json.load(json_file)
         num_samples = len(json_content)
         for i, sample in enumerate(json_content):
-            if (i + 1) % 50 == 0:
+            if (i + 1) % 250 == 0:
                 print(f"Loading image {i + 1} of {num_samples}")
             img = image_to_array(os.path.join(dataset_dir, sample['path']), invert_colours=True)
             dataset.append((img, sample["type"]))
@@ -87,4 +87,5 @@ def load_triplet_dataset(args):
     test_samples, test_labels = zip(*test)
     print("Test done.")
 
-    return train_triplet, train_samples, train_labels, test_triplet, test_samples, test_labels
+    return train_triplet, np.asarray(train_samples), np.asarray(train_labels), \
+           test_triplet, np.asarray(test_samples), np.asarray(test_labels)

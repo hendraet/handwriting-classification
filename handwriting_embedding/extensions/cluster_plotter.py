@@ -1,3 +1,5 @@
+import os
+
 import matplotlib
 import numpy as np
 import seaborn
@@ -11,10 +13,19 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 seaborn.set()
-SMALL_SIZE = 14
-MEDIUM_SIZE = 18
-LEGEND_SIZE = 16
-BIGGER_SIZE = 24
+final_cluster_size = True
+if final_cluster_size:
+    SMALL_SIZE = 18
+    MEDIUM_SIZE = 22
+    LEGEND_SIZE = 22
+    BIGGER_SIZE = 26
+    lw = 3
+else:
+    SMALL_SIZE = 14
+    MEDIUM_SIZE = 18
+    LEGEND_SIZE = 16
+    BIGGER_SIZE = 24
+    lw = 2
 
 plt.rc('font', size=BIGGER_SIZE)  # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
@@ -51,8 +62,8 @@ colour_dict = {
 label_dict = {
     "text": "Words",
     "plz": "Zip Codes",
-    "alpha_num": "Alpha Numeric Strings",
-    "alphanum": "Alpha Numeric Strings",
+    "alpha_num": "Alpha Numeric",
+    "alphanum": "Alpha Numeric",
     "date": "Dates",
     "num": "Numbers",
     "rest": "Others",
@@ -95,8 +106,6 @@ def imscatter(x, y, images, ax=None, zoom=1.0):
 
 def draw_embeddings_cluster_with_images(filename, embeddings, labels, dataset, draw_images):
     x, y, z = get_pca(embeddings)
-    plt.clf()
-    # fig = plt.figure(figsize=[12.8, 9.6])
 
     fig, ax = plt.subplots()
     fig.set_size_inches([12.8, 9.6])
@@ -114,10 +123,11 @@ def draw_embeddings_cluster_with_images(filename, embeddings, labels, dataset, d
                 cropped_images = [remove_black_rect(image_dataset[idx]) for idx in indices]
                 imscatter(coords[:, 0], coords[:, 1], cropped_images, zoom=0.15, ax=ax)
 
-            ax.scatter(coords[:, 0], coords[:, 1], label=label_dict[item], c=colour_dict[item])
+            ax.scatter(coords[:, 0], coords[:, 1], label=label_dict[item], c=colour_dict[item], s=9**2)
 
-    ax.legend(fontsize='xx-small')
+    ax.legend()
     # plt.savefig(filename, dpi=600)
+    print(f"Saving clusters to {os.path.join(os.getcwd(), filename)}")
     plt.savefig(filename)
     plt.close(fig)
 

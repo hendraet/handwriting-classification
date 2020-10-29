@@ -20,15 +20,23 @@ from classification import get_metrics, format_metrics
 # matplotlib.use("TkAgg")
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 seaborn.set()
 
-side_by_side = True
+side_by_side = False
+rocs = True
 if side_by_side:
     SMALL_SIZE = 28
     MEDIUM_SIZE = 32
     LEGEND_SIZE = 26
     BIGGER_SIZE = 36
     lw = 4
+elif rocs:
+    SMALL_SIZE = 18
+    MEDIUM_SIZE = 22
+    LEGEND_SIZE = 22
+    BIGGER_SIZE = 26
+    lw = 3
 else:
     SMALL_SIZE = 14
     MEDIUM_SIZE = 18
@@ -105,16 +113,15 @@ def get_dists(samples, same_class, split_diff_dists=False):
     return class_dists
 
 
-def get_mean_dist_for_class(sample_class, sample, test_samples, same_class):
-    # TODO: use train samples for distance calculation?
+def get_mean_dist_for_class(sample_class, sample, train_samples, same_class):
     exp_sample = np.expand_dims(sample, 0)
     if same_class:
-        same_class_samples = np.asarray([test_sample[1] for test_sample in test_samples
-                                             if test_sample[0] == sample_class
-                                             and not np.array_equal(test_sample[1], sample)])
+        same_class_samples = np.asarray([sample[1] for sample in train_samples
+                                         if sample[0] == sample_class
+                                         and not np.array_equal(sample[1], sample)])
         dists = cdist(exp_sample, same_class_samples, 'sqeuclidean')
     else:
-        other_class_samples = np.asarray([test_sample[1] for test_sample in test_samples if test_sample[0] != sample_class])
+        other_class_samples = np.asarray([sample[1] for sample in train_samples if sample[0] != sample_class])
         dists = cdist(exp_sample, other_class_samples, 'sqeuclidean')
 
     mean_dist = np.mean(dists)
@@ -133,7 +140,6 @@ def get_probability_for_dist(dist, second_class, class_dist_hists, hist_edges):
 def get_prediction(test_sample, test_samples, classes, same_class_dist_hists, other_class_dist_hists, hist_edges):
     log_likelihood_ratios = {}
     for assumed_class in classes:
-        # print(f"Assumed class: {assumed_class}")
         same_dist = get_mean_dist_for_class(assumed_class, test_sample, test_samples, same_class=True)
         same_prob = get_probability_for_dist(same_dist, assumed_class, same_class_dist_hists, hist_edges)
 
@@ -149,22 +155,16 @@ def get_prediction(test_sample, test_samples, classes, same_class_dist_hists, ot
         llr = np.log(same_prob / other_prob)
         log_likelihood_ratios[assumed_class] = llr
 
-        # print(f"Assumed class: {assumed_class}, Other class: {other_class}")
-        # print(f"Dists: {same_dist} vs {other_dist}")
-        # print(f"Probs: {same_prob} vs {other_prob}")
-        # print(f"LLR: {llr}")
-
     sorted_llrs = sorted([(cl, value) for cl, value in log_likelihood_ratios.items()], key=lambda x: x[1], reverse=True)
     highest_llr = sorted_llrs[0]
     if highest_llr[1] == float("-inf"):
         print("Best llr was -inf. Likely one or more buckets have no value")
-    # print(f"Highest LLR: {highest_llr}")
     predicted_class = highest_llr[0]
     return predicted_class
 
 
 def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split_diff_dists=False, log_dir=""):
-    classes = set(train_labels)
+    classes = sorted(list(set(train_labels)))
     samples = get_embeddings_per_class(classes, train_embeddings, train_labels)
     # contains all intra-class dists, e.g. the dist between two different text embeddings
     same_class_dists = get_dists(samples, same_class=True)
@@ -219,7 +219,6 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
 
     ### Hist ###
     for cl in classes:
-        # plt.title(f"Distance Histogram for {label_dict[cl]}")
         plt.xlabel('Distance')
         plt.ylabel('Likelihood')
 
@@ -241,39 +240,14 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
             other_hist = other_class_dist_hists[cl]
             # row.bar(center, other_hist, align='center', width=width)
             other_hist_dist = stats.rv_histogram((other_hist, hist_edges))
-            plt.plot(xx, other_hist_dist.pdf(xx), color=colour_palette[0], lw=lw, label="Inter-class Distance Distribution")
+            plt.plot(xx, other_hist_dist.pdf(xx), color=colour_palette[0], lw=lw,
+                     label="Inter-class Distance Distribution")
 
         plt.legend(loc='best')
         plt.savefig(os.path.join(log_dir, f"hist_{cl}.png"))
         plt.clf()
 
-        # Single ROC curves
-        # plt.title(f"ROC Curve for {label_dict[cl]}")
-        # plt.xlabel('False positive rate')
-        # plt.ylabel('True positive rate')
-        #
-        # lw = 2
-        # plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-        #
-        # y_true = np.zeros((len(test_samples),))
-        # y_score = np.zeros((len(test_samples),))
-        # for i, (actual_class, test_sample) in enumerate(test_samples):
-        #     dist = get_mean_dist_for_class(cl, test_sample, test_samples)
-        #     y_score[i] = dist
-        #     y_true[i] = 0 if actual_class == cl else 1
-        #
-        # y_score = y_score / max_dist
-        # fpr, tpr, thresholds = metrics.roc_curve(y_true, y_score)
-        # roc_auc = metrics.auc(fpr, tpr)
-        #
-        # plt.plot(fpr, tpr, color="darkorange", lw=lw, label=f'{label_dict[cl]} (AUC = {roc_auc:0.2f})' )
-        #
-        # plt.legend(loc='lower right')
-        # plt.savefig(os.path.join(log_dir, f"roc_{cl}.png"))
-        # plt.clf()
-
     ### Combined ROC ###
-    # plt.title(f"ROC Curves")
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
 
@@ -283,26 +257,25 @@ def calc_llr(train_embeddings, train_labels, test_embeddings, test_labels, split
         y_true = np.zeros((len(test_samples),))
         y_score = np.zeros((len(test_samples),))
         for i, (actual_class, test_sample) in enumerate(test_samples):
-            dist = get_mean_dist_for_class(cl, test_sample, test_samples, same_class=True)
+            dist = get_mean_dist_for_class(cl, test_sample, list(zip(train_labels, train_embeddings)), same_class=True)
             y_score[i] = dist
-            y_true[i] = 0 if actual_class == cl else 1  # TODO: double check
+            y_true[i] = 0 if actual_class == cl else 1
 
-        y_score = y_score / max_dist
         fpr, tpr, thresholds = metrics.roc_curve(y_true, y_score)
-        roc_auc = metrics.auc(fpr, tpr)
 
-        plt.plot(fpr, tpr, color=colour_dict[cl], lw=lw, label=f'{label_dict[cl]} (AUC = {roc_auc:0.2f})' )
+        plt.plot(fpr, tpr, color=colour_dict[cl], lw=lw, label=f'{label_dict[cl]}')
 
     handles, labels = plt.gca().get_legend_handles_labels()
     labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
     plt.legend(handles, labels, loc='lower right')
-    # plt.legend(loc='lower right')
     plt.savefig(os.path.join(log_dir, f"roc.png"))
     plt.clf()
 
     return model_metrics
 
+
 def main():
+    # TODO: add argument for filenames
     embeddings_filename = 'embeddings_5classes_9k.npy'
     saved_embeddings = np.load(embeddings_filename)
     print("Embeddings loaded")
@@ -312,16 +285,12 @@ def main():
         saved_labels = list(pickle.load(f))
     print("Labels loaded")
 
-    # test_labels = saved_labels[-1000:]
-    # test_embeddings = saved_embeddings[-1000:]
-    # saved_labels = saved_labels[:-1000]
-    # saved_embeddings = saved_embeddings[:-1000]
-
     test_labels = saved_labels[-100:]
     test_embeddings = saved_embeddings[-100:]
     saved_labels = saved_labels[:400]
     saved_embeddings = saved_embeddings[:400]
 
+    # TODO: remove
     # num_per_class = 10
     # reps = 100
     # num_samples = reps * num_per_class
