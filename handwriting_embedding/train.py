@@ -10,7 +10,7 @@ import matplotlib
 import numpy as np
 import os
 import shutil
-from chainer import training, cuda, backend, serializers, optimizers
+from chainer import training, cuda, backend, serializers, optimizers, UpdateRule
 from chainer.iterators import SerialIterator
 from chainer.training import extensions, StandardUpdater, triggers
 from tensorboardX import SummaryWriter
@@ -18,7 +18,7 @@ from collections import Counter
 
 import triplet
 from ce_evaluator import CEEvaluator
-from classification import get_metrics, evaluate_embeddings
+from classification import get_metrics, evaluate_embeddings, format_metrics
 from dataset_utils import load_triplet_dataset, load_dataset
 from eval_utils import create_tensorboard_embeddings
 from eval_utils import get_embeddings
@@ -55,7 +55,7 @@ def evaluate_triplet(model, train_samples, train_labels, test_samples, test_labe
     all_metrics = []
     num_runs = 101
     for i in range(num_runs):
-        metrics = evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels)
+        metrics = evaluate_embeddings(train_embeddings, train_labels, test_embeddings, test_labels, verbose=False)
         all_metrics.append(metrics)
 
     final_metrics = average_all_metrics(all_metrics)
@@ -95,6 +95,7 @@ def evaluate_ce(model, test, batch_size, label_map, xp):
 
     inv_label_map = {v: k for k, v in label_map.items()}
     metrics["predicted_distribution"] = {inv_label_map[k]: v for k, v in metrics["predicted_distribution"].items()}
+    print(format_metrics(metrics))
     return metrics
 
 
@@ -115,6 +116,8 @@ def main():
     parser.add_argument("-ce", "--ce-classifier", action="store_true",
                         help="use a cross entropy classifier instead of triplet loss")
     parser.add_argument("-eo", "--eval-only", type=str, help="only evaluate the given model")
+    parser.add_argument("-pce", "--pretrained-ce", type=str,
+                        help="path to a pretrained softmax classifier that should be used")
     parser.add_argument("-llr", action="store_true",
                         help="Evaluate triplets with log-likehood-ratios instead of kmeans/knn")
     args = parser.parse_args()
@@ -143,7 +146,7 @@ def main():
         if args.eval_only is not None:
             log_dir = f"runs/{args.log_dir}_eval"
         else:
-            log_dir = f"runs/{args.log_dir}_ep{epochs}"
+            log_dir = f"runs/{args.log_dir}"
         if os.path.exists(log_dir):
             user_input = input("Log dir not empty. Clear log dir? (y/N)")
             if user_input == "y":
@@ -185,19 +188,26 @@ def main():
         updater = StandardUpdater(train_iter, optimizer, device=gpu)
         evaluator = CEEvaluator(test_iter, model, device=gpu)
     else:
+        ### load dataset
+        train_triplet, train_samples, train_labels, test_triplet, test_samples, test_labels = load_triplet_dataset(args)
+
+        ### Use softmax classifier
+        train_linear_only = False
+        if args.pretrained_ce is not None:
+            classes = sorted(list(set(train_labels)))
+            ce_model = CrossEntropyClassifier(base_model, len(classes))
+            base_model = ce_model.predictor
+            train_linear_only = True
+
+        # Decide on triplet loss function; spoiler: lossless sucks
         if args.lossless:
             model = LosslessClassifier(base_model)
         else:
-            model = StandardClassifier(base_model)
+            model = StandardClassifier(base_model, train_linear_only)
 
-        train_triplet, train_samples, train_labels, test_triplet, test_samples, test_labels = load_triplet_dataset(args)
-        train_iter = TripletIterator(train_triplet,
-                                     batch_size=batch_size,
-                                     repeat=True,
-                                     xp=xp)
-        test_iter = TripletIterator(test_triplet,
-                                    batch_size=batch_size,
-                                    xp=xp)
+        ### Initialise triple loss model
+        train_iter = TripletIterator(train_triplet, batch_size=batch_size, repeat=True, xp=xp)
+        test_iter = TripletIterator(test_triplet, batch_size=batch_size, xp=xp)
 
         if int(gpu) >= 0:
             backend.get_device(gpu).use()

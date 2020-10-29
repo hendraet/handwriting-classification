@@ -131,4 +131,5 @@ prep/iamondb/original-xml-all.tar.gz
 prep/iamondb/original/
 synth_models/
 handwriting_embedding/datasets/
+.idea
 
