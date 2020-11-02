@@ -1,11 +1,6 @@
-import math
-
-from chainer import Chain, report
 import chainer.links as L
+from chainer import Chain, report
 from chainer import functions as F
-from chainer.links.model.vision.resnet import _global_average_pooling_2d
-
-from resnet import ResNet
 
 
 def lossless_triplet_loss(anchor, positive, negative, N, beta=None, epsilon=1e-8):
@@ -94,18 +89,3 @@ class CrossEntropyClassifier(Chain):
         return prediction
 
 
-
-class PooledResNet(Chain):
-    def __init__(self, n_layers):
-        super(PooledResNet, self).__init__()
-
-        with self.init_scope():
-            self.feature_extractor = ResNet(n_layers)
-        # self.visual_backprop_anchors = []
-
-    def __call__(self, x):
-        # self.visual_backprop_anchors.clear()
-        h = self.feature_extractor(x)
-        # self.visual_backprop_anchors.append(h)
-        h = _global_average_pooling_2d(h)
-        return h

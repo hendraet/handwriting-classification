@@ -10,23 +10,21 @@ import matplotlib
 import numpy as np
 import os
 import shutil
-from chainer import training, cuda, backend, serializers, optimizers, UpdateRule
+from chainer import training, cuda, backend, serializers, optimizers
 from chainer.iterators import SerialIterator
 from chainer.training import extensions, StandardUpdater, triggers
 from tensorboardX import SummaryWriter
-from collections import Counter
 
-import triplet
-from ce_evaluator import CEEvaluator
-from classification import get_metrics, evaluate_embeddings, format_metrics
 from dataset_utils import load_triplet_dataset, load_dataset
-from eval_utils import create_tensorboard_embeddings
-from eval_utils import get_embeddings
+from evaluation.ce_evaluator import CEEvaluator
+from evaluation.classification import evaluate_embeddings, get_metrics, format_metrics
+from evaluation.eval_utils import get_embeddings, create_tensorboard_embeddings
+from evaluation.log_likelihood_ratio import calc_llr
 from extensions.cluster_plotter import ClusterPlotter, draw_embeddings_cluster_with_images
-from log_likelihood_ratio import calc_llr
-from models import PooledResNet
-from models import StandardClassifier, LosslessClassifier, CrossEntropyClassifier
-from triplet_iterator import TripletIterator
+from models.classifier import CrossEntropyClassifier, LosslessClassifier, StandardClassifier
+from models.resnet import PooledResNet
+from triplet_loss_utils import triplet
+from triplet_loss_utils.triplet_iterator import TripletIterator
 
 matplotlib.use("Agg")
 
@@ -82,6 +80,7 @@ def evaluate_triplet_with_llr(train_samples, train_labels, test_samples, test_la
     return average_all_metrics(llrs)
 
 
+# TODO: move eval stuff to eval files
 def evaluate_ce(model, test, batch_size, label_map, xp):
     test_samples, test_labels = zip(*test)
 
@@ -100,10 +99,10 @@ def evaluate_ce(model, test, batch_size, label_map, xp):
 
 
 def main():
-    # TODO: cleanup and move to conf
+    # TODO: cleanup and move to conf or remove conf
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=str, help="Config file for Training params such as epochs, batch size, lr, etc.")
-    parser.add_argument("model_suffix", type=str, help="Suffix that should be added to the end of the model filename")
+    parser.add_argument("model_name", type=str, help="The name under which the models will be saved")
     parser.add_argument("dataset_dir", type=str,
                         help="Directory where the images and the dataset description is stored")
     parser.add_argument("train_path", type=str, help="path to JSON file containing train set information")
@@ -112,14 +111,11 @@ def main():
     parser.add_argument("-ld", "--log-dir", type=str, help="name of tensorboard logdir")
     parser.add_argument("-ll", "--lossless", action="store_true",
                         help="use lossless triplet loss instead of standard one")
-    parser.add_argument("--pretrained", type=str, help="path to pretrained model")
     parser.add_argument("-ce", "--ce-classifier", action="store_true",
                         help="use a cross entropy classifier instead of triplet loss")
-    parser.add_argument("-eo", "--eval-only", type=str, help="only evaluate the given model")
-    parser.add_argument("-pce", "--pretrained-ce", type=str,
-                        help="path to a pretrained softmax classifier that should be used")
     parser.add_argument("-llr", action="store_true",
                         help="Evaluate triplets with log-likehood-ratios instead of kmeans/knn")
+    parser.add_argument("-eo", "--eval-only", type=str, help="only evaluate the given model")
     args = parser.parse_args()
 
     ###################### INIT ############################
@@ -134,12 +130,11 @@ def main():
     batch_size = int(config["TRAINING"]["batch_size"])
     epochs = int(config["TRAINING"]["epochs"])
     lr = float(config["TRAINING"]["lr"])
-    # lr_interval = int(config["TRAINING"]["lr_interval"])
     gpu = config["TRAINING"]["gpu"]
 
     xp = cuda.cupy if int(gpu) >= 0 else np
 
-    model_name = f"res{str(resnet_size)}_{args.model_suffix}"
+    model_name = args.model_name
 
     # Init tensorboard writer
     if args.log_dir is not None:
@@ -160,8 +155,7 @@ def main():
         log_file.write(f"{' '.join(sys.argv[1:])}\n")
     shutil.copy(args.config, writer.logdir)
 
-    print("MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size),
-          "EPOCHS:", str(epochs))
+    print("MODEL_NAME:", model_name, "BATCH_SIZE:", str(batch_size), "EPOCHS:", str(epochs))
 
     #################### Train and Save Model ########################################
     if args.ce_classifier:
@@ -191,19 +185,11 @@ def main():
         ### load dataset
         train_triplet, train_samples, train_labels, test_triplet, test_samples, test_labels = load_triplet_dataset(args)
 
-        ### Use softmax classifier
-        train_linear_only = False
-        if args.pretrained_ce is not None:
-            classes = sorted(list(set(train_labels)))
-            ce_model = CrossEntropyClassifier(base_model, len(classes))
-            base_model = ce_model.predictor
-            train_linear_only = True
-
         # Decide on triplet loss function; spoiler: lossless sucks
         if args.lossless:
             model = LosslessClassifier(base_model)
         else:
-            model = StandardClassifier(base_model, train_linear_only)
+            model = StandardClassifier(base_model)
 
         ### Initialise triple loss model
         train_iter = TripletIterator(train_triplet, batch_size=batch_size, repeat=True, xp=xp)

@@ -40,6 +40,7 @@ def generate_positives_negatives(anchors):
         sample_class = sample[1]
         positive_found = False
         negative_found = False
+        # TODO: fallback for dataset that is too small
         while not (positive_found and negative_found):
             sample_idx = random.randint(0, len(anchors) - 1)
             candidate = anchors[sample_idx]
