@@ -1,3 +1,0 @@
-Pillow>=7.1.0
-numpy
-chainer

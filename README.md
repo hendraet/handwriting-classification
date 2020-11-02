@@ -5,7 +5,9 @@ The `prep` directory contains a set of scripts that were used to create datasets
 
 ## Installation
 
-Install the necessary dependencies by executing `pip install -r requirements.txt` in the respective subdirectories.
+Install the necessary dependencies by executing `pip install -r requirements.txt` in the root directory.  
+For some of the scripts contained in the `prep` directory, it is necessary to install additional dependencies.
+These can be installed by executing `pip install -r requirements.txt` in that directory.
 
 ## Training the Models
 
