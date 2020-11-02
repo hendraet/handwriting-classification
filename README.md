@@ -54,7 +54,7 @@ The best model is chosen based on the best validation loss.
 
 ## Dataset Preparation Scripts
 
-The `prep` directory contains a set of scripts that were used to create datasets.
+The `prep` directory contains a set of scripts that were mainly used to create and process datasets.
 
 The `dataset_processing` directory contains scripts for:
 
