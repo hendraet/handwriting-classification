@@ -1,8 +1,5 @@
 # Handwriting Classification
 
-The `handwriting_embedding` directory contains the proposed models used for handwriting classification.
-The `prep` directory contains a set of scripts that were used to create datasets.
-
 ## Installation
 
 Install the necessary dependencies by executing `pip install -r requirements.txt` in the root directory.  
@@ -10,6 +7,8 @@ For some of the scripts contained in the `prep` directory, it is necessary to in
 These can be installed by executing `pip install -r requirements.txt` in that directory.
 
 ## Training the Models
+
+The `handwriting_embedding` directory contains the proposed models used for handwriting classification.
 
 ### Configuration
 
@@ -52,3 +51,23 @@ The loss curves are plotted and saved as `[model name]_loss.png`.
 
 Finally, the model is saved after each epoch (`[model name]_full_[epoch].npz`) and the best model is saved separately in `[model name]_full_best.npz`.
 The best model is chosen based on the best validation loss.
+
+## Dataset Preparation Scripts
+
+The `prep` directory contains a set of scripts that were used to create datasets.
+
+The `dataset_processing` directory contains scripts for:
+
+- Merging multiple datasets and splitting them into train and test files
+- Generating JSON dataset descriptions (in the format of train and test files) based on image file names 
+- Generating the dataset descriptions for the IAMDB and IAM-Hist-DB datasets
+- Creating samples of printed text
+
+The `experiments` directory contains a script for automatically repeating experiments and converting the `metrics.log` files into Latex tables
+
+The `iamondb` directory contains a script for the manual extraction of strokes from online handwriting data as well as a script that synthesises new dates and/or numbers out of the extracted strokes.
+
+Scripts for image augmentation, binarisation, colour inversion and resizing can be found in the `image_processing` directory.
+
+Not all of the scripts can be configured via command line arguments and sometimes variables have to be altered in the code to adapt the behaviour.
+

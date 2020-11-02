@@ -8,7 +8,7 @@ import random
 from PIL import Image, ImageDraw, ImageFont
 from nltk.corpus import words
 
-from prep.resize_images import resize_img, create_tar
+from prep.image_processing.resize_images import resize_img, create_tar
 
 
 def generate_number():
@@ -58,9 +58,8 @@ def generate_plz():
     return str(random.randint(0, 100000)).zfill(5)
 
 
-def generate_image(txt, add_additional_padding=False):
+def generate_image(txt, font_dir, add_additional_padding=False):
     fontsize = 70
-    font_dir = "../google-fonts"
     font_name = random.choice(os.listdir(font_dir))
     # font_name = "Dhurjati-Regular.ttf"
     font = font_dir + "/" + font_name
@@ -92,6 +91,8 @@ def main():
                         help="path to directory where the dataset tar should be stored")
     parser.add_argument("-fd", "--final-dir", type=str,
                         help="path to directory where the model will read the data from")
+    parser.add_argument("-fod", "--font-dir", type=str, default="../google-fonts",
+                        help="path to directory where the font data lies")
     parser.add_argument("-n", "--num", type=int, default=1, help="num of images to be generated")
     parser.add_argument("-t", "--type", type=str, choices=["date", "text", "num", "plz", "alpha_num"], default="date",
                         help="type of text to be generated or replicate strings from json")
@@ -146,7 +147,7 @@ def main():
         assert not image_files, "There are already image files in the out dir"
 
     for generated_string, string_type in dataset:
-        img, font_name, text_dimensions = generate_image(generated_string)
+        img, font_name, text_dimensions = generate_image(generated_string, args.font_dir)
         cleansed_string = generated_string.replace("/", "_").replace(" ", "_")
         img_name = cleansed_string + "-" + os.path.splitext(font_name)[0]
         img_path = intermediate_dir + img_name + ".png"

@@ -12,7 +12,7 @@ import os
 import random
 from PIL import ImageDraw, Image
 
-from prep.resize_images import create_tar, resize_img
+from prep.image_processing.resize_images import create_tar, resize_img
 
 
 def normalise_dataset(dataset):
@@ -244,20 +244,29 @@ def convert_from_absolute_to_relative(x, y):
 def main():
     string_type_choices = ["num", "date", "all"]
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dataset_name")
-    parser.add_argument("string_type", choices=string_type_choices)
-    parser.add_argument("tar_dir")
-    parser.add_argument("final_dir")
-    parser.add_argument("--dataset-dir", default="../datasets")
-    parser.add_argument("--description-dir", default="../dataset_descriptions")
-    parser.add_argument("--num-dataset", default="iamondb_num")
-    parser.add_argument("--dot-dataset", default="iamondb_dot")
-    parser.add_argument("--dash-dataset", default="iamondb_dash")
-    parser.add_argument("--num", type=int, default="10")
-    parser.add_argument("--show-image", action="store_true")
+    parser = argparse.ArgumentParser(
+        description="A tool for synthesising dates and numbers out of online data.")
+    parser.add_argument("dataset_name", help="Name of the dataset that should be generated.")
+    parser.add_argument("string_type", choices=string_type_choices,
+                        help="The type of string that should be generated. Can be 'num', 'date' or 'all'.")
+    parser.add_argument("tar_dir", help="Generated files will be stored as tar in the dir specified here.")
+    parser.add_argument("final_dir", help="Dir where the generated files will be moved to.")
+    parser.add_argument("--dataset-dir", default="../datasets",
+                        help="The directory where the extracted strokes are stored as npy files.")
+    parser.add_argument("--description-dir", default="../dataset_descriptions",
+                        help="The path of csv file that labels the strokes in the dataset-dir.")
+    parser.add_argument("--num-dataset", default="iamondb_num",
+                        help="The name of the dataset that contains all the number strokes. This is required for date and "
+                             "number generation.")
+    parser.add_argument("--dot-dataset", default="iamondb_dot",
+                        help="The name of the dataset that contains the dot strokes. This is required for dates only.")
+    parser.add_argument("--dash-dataset", default="iamondb_dash",
+                        help = "The name of the dataset that contains the dash strokes. This is required for dates only.")
+    parser.add_argument("--num", type=int, default="10", help="The number of samples that should be generated.")
+    parser.add_argument("--show-image", action="store_true", help="Shows the generated image for each sample.")
     parser.add_argument("--synth-ready", action="store_true",
-                        help="Csv and npy files will be generated JSON and images otherwise")
+                        help="Csv and npy files will be generated JSON and images otherwise. Should be used if the "
+                             "generated string should be used for further synthesis.")
     args = parser.parse_args()
 
     out_dir = args.dataset_dir

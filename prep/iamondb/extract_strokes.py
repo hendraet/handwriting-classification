@@ -1,13 +1,12 @@
+import traceback
+
 import argparse
 import math
-import sys
-import tkinter as tk
-import traceback
-import xml.etree.ElementTree as ET
-
 import numpy as np
 import os
 import re
+import tkinter as tk
+import xml.etree.ElementTree as ET
 from PIL import Image, ImageDraw, ImageTk
 
 
@@ -198,7 +197,12 @@ def write_results(descr_filename, stroke_filename, extracted_infos):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="A GUI tool for manually extracting strokes from online handwriting data.\n"
+                    "Use the left and right key to define the beginning of the string and hit 'return' on completetion."
+                    "Repeat the same for the end of the string. Hitting 'backspace' will reset the strokes and 'R' will"
+                    "remove a sample from the dataset.\n"
+                    "The format of the dataset should be the same as that of the IAMONDB dataset.")
     parser.add_argument("regex", nargs='+', help="The regexes for finding the strings to extract.")
     parser.add_argument("file_suffix", help="A suffix, e.g. 'num', that should be added to the filename of the results.")
     parser.add_argument("-ar", "--ascii-root-dir", default="ascii/",

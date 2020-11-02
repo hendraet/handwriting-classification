@@ -4,7 +4,7 @@ import copy
 import numpy as np
 import os
 
-from prep.resize_images import resize_img
+from prep.image_processing.resize_images import resize_img
 
 np.random.bit_generator = np.random._bit_generator
 
