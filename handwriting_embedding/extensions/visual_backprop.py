@@ -5,7 +5,6 @@ import chainer.functions as F
 import numpy as np
 from PIL import Image
 from chainer import cuda
-from chainer.backends.cuda import GpuDevice
 from chainer.functions.connection.convolution_2d import Convolution2DFunction
 from chainer.functions.pooling.pooling_2d import Pooling2D
 from chainer.training import Extension

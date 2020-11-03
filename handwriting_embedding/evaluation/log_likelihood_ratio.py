@@ -1,85 +1,29 @@
-import sys
-
-import copy
-import itertools
-import os
 import pickle
+import sys
 
 import matplotlib
 import numpy as np
-import random
+import os
 import seaborn as seaborn
 from scipy import stats
 from scipy.spatial.distance import cdist
 from sklearn import metrics
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-from collections import Counter
 
-from classification import get_metrics, format_metrics
+from evaluation.classification import get_metrics, format_metrics
+from plot_utils import colour_dict, colour_palette, label_dict, configure_plots
 
-# matplotlib.use("TkAgg")
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 seaborn.set()
-
 side_by_side = False
-rocs = True
+rocs = True  # When plotting the ROC curves, this should be set to true
 if side_by_side:
-    SMALL_SIZE = 28
-    MEDIUM_SIZE = 32
-    LEGEND_SIZE = 26
-    BIGGER_SIZE = 36
-    lw = 4
+    lw = configure_plots(plt, size="large")
 elif rocs:
-    SMALL_SIZE = 18
-    MEDIUM_SIZE = 22
-    LEGEND_SIZE = 22
-    BIGGER_SIZE = 26
-    lw = 3
+    lw = configure_plots(plt, size="medium")
 else:
-    SMALL_SIZE = 14
-    MEDIUM_SIZE = 18
-    LEGEND_SIZE = 16
-    BIGGER_SIZE = 24
-    lw = 2
-
-plt.rc('font', size=BIGGER_SIZE)  # controls default text sizes
-plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
-plt.rc('legend', fontsize=LEGEND_SIZE)  # legend fontsize
-plt.rc('figure', titlesize=BIGGER_SIZE)
-
-colour_palette = [
-    (215, 25, 28),  # red
-    (253, 174, 97),  # orange
-    (255, 255, 191),  # yellow
-    (171, 221, 164),  # green
-    (43, 131, 186)  # blue
-]
-colour_palette = [(colour[0] / 255, colour[1] / 255, colour[2] / 255) for colour in colour_palette]
-
-colour_dict = {
-    "text": colour_palette[0],
-    "plz": colour_palette[1],
-    "alpha_num": colour_palette[2],
-    "alphanum": colour_palette[2],
-    "date": colour_palette[3],
-    "num": colour_palette[4],
-    "rest": colour_palette[0]
-}
-
-label_dict = {
-    "text": "Words",
-    "plz": "Zip Codes",
-    "alpha_num": "Alpha Numeric Strings",
-    "alphanum": "Alpha Numeric Strings",
-    "date": "Dates",
-    "num": "Numbers",
-    "rest": "Others",
-}
+    lw = configure_plots(plt, size="small")
 
 
 def get_embeddings_per_class(classes, embeddings, labels):

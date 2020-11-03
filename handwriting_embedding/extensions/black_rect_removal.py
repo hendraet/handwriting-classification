@@ -1,10 +1,8 @@
-import matplotlib.image as mpimg
 import matplotlib
 import numpy as np
 from PIL import Image
 
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 
 def remove_black_rect(img):
