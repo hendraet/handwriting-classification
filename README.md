@@ -4,35 +4,33 @@ This repository contains the implemenation of the methods described in the paper
 
 ## Installation
 
-For installing the dependencies and running the code `python 3.7` and `pip3` are required.
-Install the necessary dependencies by executing `pip install -r requirements.txt` in the root directory.
+For installing the dependencies and running the code `python 3.7` and `pip3` are required.  
+Install the necessary dependencies by executing `pip install -r requirements.txt` in the root directory.  
 For some of the scripts contained in the `prep` directory, it is necessary to install additional dependencies.
 These can be installed by executing `pip install -r requirements.txt` in that directory.
 
 ## Datasets
 
 The training requires a labelled set of images that display handwriting.
-These images should be resized to a size of `64 x 216px` (height x width).
+These images should be resized to a size of `64 x 216px` (height x width).  
 If the original images have a different aspect ratio, padding that matches the background of the handwriting should be added.
 A script to resize the images of a dataset can be found under `prep/image_processing/resize_images.py`.
 
 Each dataset has to be described by a JSON file.
-An example for such a file can be found under `datasets/train_test_file_example.json`.
+An example for such a file can be found under `datasets/train_test_file_example.json`.  
 Each sample has to be labelled as one of the following types: text, num, alpha_num, plz (used for zip codes) or date.
 Additionally, each sample needs the path to the corresponding image and the string, which it represents.
 
-A dataset that consists of synthesised handwritten text that contains numbers, words and dates can be found [here](https://bartzi.de/documents/attachment/download?hash_value=e4e920280a8564672500da6b30c8b33a_56).
-The images were synthesised using a modified version the GANwriting model, which can be found [here](https://github.com/hendraet/research-GANwriting/).
-
-Another version of this dataset adds printed text and two more classes: zip codes and alphanumeric strings.
-It is denoted 5CHPT (Five Classes of Handwritten and Printed Text) and can be downloaded [here](https://bartzi.de/documents/attachment/download?hash_value=dc55b0626912769315b04415a6e101e6_55).
+For the experiments in the paper mainly two datasets were used.
+The first dataset consists of synthesised handwritten text that contains numbers, words and dates.
+The images were synthesised using a modified version the GANwriting model, which can be found [here](https://github.com/hendraet/research-GANwriting/).  
+The second version of this dataset adds printed text and two more classes: zip codes and alphanumeric strings.
+It is denoted 5CHPT (Five Classes of Handwritten and Printed Text).  
+These two datasets can be downloaded [here](https://bartzi.de/research/handwriting_classification).
 
 ## Pretrained Models
 
-Pretrained models for the datasets mentioned above can be found under the following links:
-
-- [GANwriting Triplet Loss and Softmax](https://bartzi.de/documents/attachment/download?hash_value=3ad99ecbf623608b05bbf97b8c9f4ffc_54)
-- [5CHPT Triplet Loss and Softmax](https://bartzi.de/documents/attachment/download?hash_value=a94a571e6a1ca8f992d6f5a50bab9320_53)
+Pretrained models for the datasets mentioned above can be found on [this](https://bartzi.de/research/handwriting_classification) website.
 
 ## Training the Models
 
@@ -63,7 +61,7 @@ If not provided, the standard Tensorboard naming scheme will be used for naming 
 
 ### Results
 
-Every training or evaluation produces the file `metrics.log`, which is saved in the logging directoy.
+Every training or evaluation produces the file `metrics.log`, which is saved in the logging directoy.  
 It contains accuracy, precision, recall, f1_scores, the confusion matrix, as well as the initial support for each class.
 Precision, recall and F1 score are calculated for each class, as well as the weighted (prefix `w_`) and unweighted (prefix `uw_`) average.
 The scores in the lists correspond to the alphabetically sorted list of class tags.
