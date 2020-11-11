@@ -1,6 +1,7 @@
 # Handwriting Classification
 
-This repository contains the implemenation of the methods described in the paper [Handwriting Classification for the Analysis of Art-Historical Documents](https://arxiv.org/abs/2011.02264).
+This repository contains the implemenation of the methods described in the paper [Handwriting Classification for the Analysis of Art-Historical Documents](https://arxiv.org/abs/2011.02264) (preprint).  
+This paper was accepted to [FAPER 2020](https://sites.google.com/view/faper-workshop).
 
 ## Installation
 
