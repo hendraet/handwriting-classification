@@ -10,9 +10,6 @@ from PIL import Image
 from os.path import join
 
 
-# Useful for recursive traversion:
-# tmp = [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(indir)) for f in fn]
-
 # additional padding: (left, top, right, bot)
 def resize_img(img, target_dimensions, padding_color=0, additional_padding=(0, 0, 0, 0)):
     # adapt target dimensions
