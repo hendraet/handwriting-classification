@@ -19,6 +19,7 @@ def generate_number():
 
 
 def generate_date():
+    # TODO: better dates (including month words especially)
     # Would be nice to support:
     # DD.MM.YY
     # DD.MM.YYYY
@@ -49,13 +50,19 @@ def generate_alpha_num():
     # TODO: make sure at least one num and one char
     length = random.randint(3, 12)
     possible_chars = string.ascii_uppercase + string.ascii_lowercase + string.digits + "_"
-    x = ''.join(random.choice(possible_chars) for _ in range(length))
-    print(x)
+    x = "".join(random.choice(possible_chars) for _ in range(length))
     return x
 
 
 def generate_plz():
     return str(random.randint(0, 100000)).zfill(5)
+
+
+def generate_special_chars():
+    length = random.randint(3, 12)
+    possible_chars = string.punctuation + len(string.punctuation) * " "
+    x = "".join(random.choice(possible_chars) for _ in range(length))
+    return x
 
 
 def generate_image(txt, font_dir, add_additional_padding=False):
@@ -94,8 +101,8 @@ def main():
     parser.add_argument("-fod", "--font-dir", type=str, default="../google-fonts",
                         help="path to directory where the font data lies")
     parser.add_argument("-n", "--num", type=int, default=1, help="num of images to be generated")
-    parser.add_argument("-t", "--type", type=str, choices=["date", "text", "num", "plz", "alpha_num"], default="date",
-                        help="type of text to be generated or replicate strings from json")
+    parser.add_argument("-t", "--type", type=str, choices=["date", "text", "num", "plz", "alpha_num", "spec_char"],
+                        default="date", help="type of text to be generated or replicate strings from json")
     parser.add_argument("-s", "--show", action="store_true", help="show image(s) after generation")
     parser.add_argument("-p", "--json_img_path", type=str, default="",
                         help="dir path that should be prepended to every path in json file")
@@ -138,6 +145,8 @@ def main():
                 dataset.append((generate_plz(), string_type))
             elif string_type == "alpha_num":
                 dataset.append((generate_alpha_num(), string_type))
+            elif string_type == "spec_char":
+                dataset.append((generate_special_chars(), string_type))
             else:
                 print("Unexpected type")
                 exit(1)
@@ -146,12 +155,16 @@ def main():
         image_files = [fn for fn in os.listdir(intermediate_dir) if fn.endswith(".png")]
         assert not image_files, "There are already image files in the out dir"
 
-    for generated_string, string_type in dataset:
+    for i, (generated_string, string_type) in enumerate(dataset):
         img, font_name, text_dimensions = generate_image(generated_string, args.font_dir)
-        cleansed_string = generated_string.replace("/", "_").replace(" ", "_")
-        img_name = cleansed_string + "-" + os.path.splitext(font_name)[0]
-        img_path = intermediate_dir + img_name + ".png"
-        json_img_path = json_img_dir + img_name + ".png"
+        if string_type == "spec_char":
+            max_num_id_digits = len(str(args.num))
+            cleansed_string = f"{i:0{max_num_id_digits}d}_special_char"
+        else:
+            cleansed_string = generated_string.replace("/", "_").replace(" ", "_")
+        img_name = f"{cleansed_string}-{os.path.splitext(font_name)[0]}"
+        img_path = os.path.join(intermediate_dir, f"{img_name}.png")
+        json_img_path = os.path.join(json_img_dir, f"{img_name}.png")
 
         if show_image:
             img.show()
@@ -176,5 +189,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # assert False, "Dates DD Month YYYY have to be fixed"
     main()
