@@ -12,7 +12,8 @@ import os
 import random
 from PIL import ImageDraw, Image
 
-from prep.image_processing.resize_images import create_tar, resize_img
+from prep.image_processing.resize_images import resize_img
+from prep.utils import create_tar
 
 
 def normalise_dataset(dataset):
