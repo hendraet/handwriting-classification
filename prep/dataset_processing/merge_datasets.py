@@ -1,5 +1,8 @@
 import argparse
 import json
+import textwrap
+
+import shutil
 
 import os
 import random
@@ -7,12 +10,25 @@ import tarfile
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description="Merging multiple datasets and generating new descriptions and tars")
+    help_str = '''
+    Merging multiple datasets and generating new descriptions and tars 
+    
+    The script creates the follwing dataset file structure:
+    - {dataset_dir}
+        - dataset root: {new_dataset_name}, e.g. "cifar10"
+            - partition0: {partition_names[0]}, e.g. "train"
+                - dataset description {new_dataset_name}_{partition_names[0]}.json, e.g. "cifar10_train.json"
+                - [images that are part of this partition]
+            - [more partitions]
+                - ...
+    '''
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description=textwrap.dedent(help_str))
     parser.add_argument("new_dataset_name", type=str, help="the name of the new dataset")
-    parser.add_argument("dataset_dir", type=str, help="the directory where the dataset descriptions are located")
+    parser.add_argument("dataset_dir", type=str, help="the directory where the resulting dataset should be saved to")
     parser.add_argument("tar_dir", type=str, help="the directory where the resulting tar archive should be stored")
     parser.add_argument("json_paths", type=str, nargs="+",
-                        help="the filename of all dataset descriptions (json) that should be merged")
+                        help="the paths of all dataset descriptions (json) that should be merged")
     parser.add_argument("-ac", "--allowed-classes", type=str, nargs="+",
                         help="only use the given string types for the new dataset")
     parser.add_argument("-pp", "--partition-percentages", type=float, nargs="+", default=[0.9, 0.1],
@@ -34,14 +50,14 @@ def get_args():
     return args
 
 
-def get_new_dataset_partitions(json_paths, dataset_dir, balance_classes=True, partition_percentages=(1.0,),
-                               sample_limits=(None,), allowed_classes=None):
+def get_new_dataset_partitions(json_paths, balance_classes=True, partition_percentages=(1.0,), sample_limits=(None,),
+                               allowed_classes=None):
     if not balance_classes:
         raise NotImplementedError
 
     dataset = {}
     for dataset_description_path in json_paths:
-        with open(os.path.join(dataset_dir, dataset_description_path), "r") as f:
+        with open(dataset_description_path, "r") as f:
             json_file = json.load(f)
 
         for sample in json_file:
@@ -50,7 +66,10 @@ def get_new_dataset_partitions(json_paths, dataset_dir, balance_classes=True, pa
 
             if sample["type"] not in dataset:
                 dataset[sample["type"]] = []
-            dataset[sample["type"]].append(sample)
+            dataset[sample["type"]].append({
+                "sample_info": sample,
+                "orig_dir": os.path.dirname(dataset_description_path)
+            })
 
     max_len_per_class = min([len(ds) for ds in dataset.values()])  # Make dataset balanced
     partition_indices = []
@@ -85,31 +104,45 @@ def main():
                           zip(args.partition_names, args.sample_limits)])
     print(f"Limiting sample numbers to {info_str}")
 
-    partitions = get_new_dataset_partitions(args.json_paths, args.dataset_dir,
+    partitions = get_new_dataset_partitions(args.json_paths,
                                             partition_percentages=args.partition_percentages,
                                             sample_limits=args.sample_limits,
                                             allowed_classes=args.allowed_classes)
 
     print(f"Saving {'/'.join([str(len(partition)) for partition in partitions])} samples")
 
+    new_dataset_dir = os.path.join(args.dataset_dir, args.new_dataset_name)
+    os.makedirs(new_dataset_dir)
     tar_filename = os.path.join(args.tar_dir, f"{args.new_dataset_name}_{'_'.join(args.partition_names)}.tar.bz2")
     # creating an extra set for the image paths to get rid of duplicates
-    image_paths = set()
     with tarfile.open(tar_filename, "w:bz2") as tar:
         for partition_suffix, partition in zip(args.partition_names, partitions):
-            path = os.path.join(args.dataset_dir, f"{args.new_dataset_name}_{partition_suffix}.json")
-            with open(path, "w") as out_file:
-                json.dump(partition, out_file, indent=4)
+            image_paths = {}
+            partition_dir = os.path.join(new_dataset_dir, partition_suffix)
+            os.makedirs(partition_dir)
+
+            out_json_path = os.path.join(partition_dir, f"{args.new_dataset_name}_{partition_suffix}.json")
+            all_sample_info = [sample["sample_info"] for sample in partition]
+            with open(out_json_path, "w") as out_file:
+                json.dump(all_sample_info, out_file, indent=4)
 
             for i, sample in enumerate(partition):
-                image_paths.add(sample["path"])
-            tar.add(path, arcname=os.path.basename(path))
+                filename = sample["sample_info"]["path"]
+                orig_dir = sample["orig_dir"]
+                if filename in image_paths:
+                    if orig_dir != image_paths[filename]:
+                        print(f"A file with the name {filename} is part of at least two datasets: "
+                              f"{os.path.basename(image_paths[filename])}, {os.path.basename(orig_dir)}")
+                    else:
+                        print(f"A file with the name {filename} is contained multiple times in the dataset "
+                              f"{os.path.basename(image_paths[filename])}")
+                else:
+                    image_paths[filename] = orig_dir
+                    src_path = os.path.join(orig_dir, filename)
+                    dest_path = os.path.join(partition_dir, filename)
+                    shutil.copy(src_path, dest_path)
 
-        num_samples = len(image_paths)
-        for path in image_paths:
-            if num_samples // 10 > 0 and (i + 1) % (num_samples // 10) == 0:  # avoid mod 0 if dataset too small
-                print(f"Adding image {i}/{num_samples}")
-            tar.add(os.path.join(args.dataset_dir, path), arcname=path)
+            tar.add(partition_dir, arcname=os.path.basename(partition_dir))
 
 
 if __name__ == '__main__':
