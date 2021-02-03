@@ -75,9 +75,9 @@ def main():
         if SAVE_ORIGINAL:
             assert os.path.split(json_images[0]['path'])[0] == os.path.split(new_image_infos[0]['path'])[0],\
                 "Original path differs from new path"
-            json.dump(json_images + new_image_infos, out_json, indent=4)
+            json.dump(json_images + new_image_infos, out_json, ensure_ascii=False, indent=4)
         else:
-            json.dump(new_image_infos, out_json, indent=4)
+            json.dump(new_image_infos, out_json, ensure_ascii=False, indent=4)
 
     print(f'Created {len(new_image_infos)} new images (original: {len(json_images)})')
 

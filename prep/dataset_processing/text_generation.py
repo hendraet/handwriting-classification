@@ -216,7 +216,7 @@ def main():
 
     if save_image:
         with open(out_json_path, "w+") as json_file:
-            json.dump(img_list, json_file, indent=4)
+            json.dump(img_list, json_file, ensure_ascii=False, indent=4)
         create_tar(args.dataset_name, out_json_path, intermediate_dir, args.tar_dir, args.final_dir)
 
 

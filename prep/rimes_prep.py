@@ -1,5 +1,4 @@
 import json
-import shutil
 from argparse import ArgumentParser
 
 import os
@@ -32,12 +31,8 @@ def get_class_for_label(label):
 
 
 def main():
-    # TODO: analyse if classes are somewhat equally distributed over - They are somewhat
-    # TODO: split into classes
-    # TODO: save each class into single file
-    # (TODO): merge (and balance) with merging script
     parser = ArgumentParser()
-    parser.add_argument("--dataset-dir", default="../orig_datasets/rimes",
+    parser.add_argument("--dataset-dir", default="../orig_datasets/rimes_flat",
                         help="location of the original RIMES dataset")
     parser.add_argument("--labelled", action="store_true", default=False,
                         help="If used the resulting JSON file will contain the type for each sample. Otherwise this "
@@ -76,10 +71,12 @@ def main():
 
                 if string_cls not in categorised_samples[i]:
                     categorised_samples[i][string_cls] = []
+                base_path = os.path.basename(path)
+                assert os.path.exists(os.path.join(dataset_dir, base_path)), "This script expects a flat hierachy, i.e all images have to be in the root directory. This can be done by executing the following command in the root dir of the original RIMES dataset: find . -mindepth 2 -type f -exec mv -t . -i '{}' +"
                 categorised_samples[i][string_cls].append({
                     "string": label,
                     "type": string_cls,
-                    "path": path
+                    "path": base_path
                 })
 
     sample_infos = []
@@ -89,12 +86,14 @@ def main():
             sample_infos.extend(samples)
 
     if args.dataset_name is None:
-        dataset_name = f"rimes_{'labelled' if labelled else 'unlabelled'}.json"
+        dataset_name = f"rimes_{'labelled' if labelled else 'unlabelled'}"
     else:
         dataset_name = args.dataset_name
-    out_json_path = os.path.join(dataset_dir, dataset_name)
+
+    out_json_path = f"{os.path.join(dataset_dir, dataset_name)}.json"
     with open(out_json_path, "w+") as json_file:
-        json.dump(sample_infos, json_file, indent=4)
+        json.dump(sample_infos, json_file, ensure_ascii=False, indent=4)
+
     create_tar(dataset_name, out_json_path, dataset_dir, args.tar_dir, move_images_instead_of_copy=False,
                final_dir=args.final_dir)
     os.remove(out_json_path)

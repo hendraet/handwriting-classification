@@ -1,15 +1,11 @@
 import argparse
 import json
-import tarfile
-
-import random
-
-import os
-import shutil
-
-from PIL import Image
 from os.path import join
 
+import os
+import random
+import shutil
+from PIL import Image
 
 # additional padding: (left, top, right, bot)
 from prep.utils import create_tar

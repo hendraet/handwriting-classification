@@ -324,7 +324,7 @@ def main():
         new_dataset_name = args.dataset_name
         new_dataset_description = os.path.join(out_dir, new_dataset_name + ".json")
         with open(new_dataset_description, "w") as out_json:
-            json.dump(dataset_info, out_json, indent=4)
+            json.dump(dataset_info, out_json, ensure_ascii=False, indent=4)
 
         create_tar(new_dataset_name, new_dataset_description, out_dir, args.tar_dir, args.final_dir)
 
