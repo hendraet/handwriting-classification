@@ -9,7 +9,8 @@ from PIL import Image, ImageDraw, ImageFont
 from nltk.corpus import words
 from skimage.draw import random_shapes
 
-from prep.image_processing.resize_images import resize_img, create_tar
+from prep.image_processing.resize_images import resize_img
+from prep.utils import create_tar
 
 
 def generate_number():
@@ -141,7 +142,7 @@ def main():
     parser.add_argument("-td", "--tar-dir", type=str, default="datasets/tars",
                         help="path to directory where the dataset tar should be stored")
     parser.add_argument("-fd", "--final-dir", type=str,
-                        help="path to directory where the model will read the data from")
+                        help="path to directory where the results should be moved to")
     parser.add_argument("-fod", "--font-dir", type=str, default="../google-fonts",
                         help="path to directory where the font data lies")
     parser.add_argument("-n", "--num", type=int, default=1, help="num of images to be generated")
@@ -158,6 +159,7 @@ def main():
     parser.add_argument("-is", "--image-size", type=int, nargs=2, default=[64, 216],
                         help="size of the resulting images in the format (height, width)")
     args = parser.parse_args()
+    # TODO: unlabelled flag?
 
     print(f"Generating images of size {args.image_size[0]}x{args.image_size[1]} (height x width)")
 
