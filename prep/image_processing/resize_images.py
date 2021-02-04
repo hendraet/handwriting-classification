@@ -7,10 +7,10 @@ import random
 import shutil
 from PIL import Image
 
-# additional padding: (left, top, right, bot)
 from prep.utils import create_tar
 
 
+# additional padding: (left, top, right, bot)
 def resize_img(img, target_dimensions, padding_color=0, additional_padding=(0, 0, 0, 0)):
     # adapt target dimensions
     new_width = target_dimensions[0] - additional_padding[0] - additional_padding[2]

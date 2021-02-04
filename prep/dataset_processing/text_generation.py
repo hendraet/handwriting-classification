@@ -3,6 +3,7 @@ import json
 import string
 from datetime import datetime
 
+import nltk
 import os
 import random
 from PIL import Image, ImageDraw, ImageFont
@@ -69,10 +70,12 @@ def generate_special_chars():
 
 def get_string_dataset(args, string_type):
     if string_type == "text":
-        # installation of word list is needed on first installation of nltk.
-        # nltk.download("words")
         max_length = 9
-        word_list = words.words()
+        try:
+            word_list = words.words()
+        except LookupError:
+            nltk.download("words")
+            word_list = words.words()
         word_list = [word for word in word_list if len(word) < max_length]
 
     dataset = []
@@ -134,8 +137,54 @@ def generate_shapes(img_size):
     return img
 
 
+def generate_images_for_string_type(string_type, args):
+    dataset = get_string_dataset(args, string_type)
+
+    img_list = []
+    for i, (generated_string, string_type) in enumerate(dataset):
+        # Generate image
+        if string_type == "shape":
+            img = generate_shapes(args.image_size)
+            font_name = ""
+        else:
+            img, font_name, _ = generate_image(generated_string, args.font_dir, args.pil_image_size)
+
+        # Generate filename
+        if string_type in ["spec_char", "shape"]:
+            max_num_id_digits = len(str(args.num))
+            cleansed_string = f"{i:0{max_num_id_digits}d}_{string_type}"
+        else:
+            cleansed_string = generated_string.replace("/", "_").replace(" ", "_")
+        img_name = f"generated_{string_type}_{cleansed_string}"
+        if font_name != "":  # shapes don't have a font
+            img_name += f"-{os.path.splitext(font_name)[0]}"
+
+        img_path = os.path.join(args.intermediate_dir, f"{img_name}.png")
+        json_img_path = os.path.join(args.json_img_dir, f"{img_name}.png")
+
+        if args.show_images:
+            img.show()
+
+        if args.save_images:
+            with open(img_path, "wb+") as img_file:
+                img.save(img_file, format="PNG")
+
+        info = {
+            "string": generated_string,
+            "type": string_type if not args.unlabelled else "",
+            "path": json_img_path,
+            "font": font_name
+        }
+        img_list.append(info)
+
+    return img_list
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generating images with random text")
+    parser.add_argument("types", type=str, nargs="+",
+                        choices=["date", "text", "num", "plz", "alpha_num", "spec_char", "shape"],
+                        help="type of text to be generated")
     parser.add_argument("-d", "--intermediate-dir", type=str, default="datasets/",
                         help="path to directory where image will be stored temporarily. This dir has to be free of "
                              "images")
@@ -146,78 +195,37 @@ def main():
     parser.add_argument("-fod", "--font-dir", type=str, default="../google-fonts",
                         help="path to directory where the font data lies")
     parser.add_argument("-n", "--num", type=int, default=1, help="num of images to be generated")
-    parser.add_argument("-t", "--type", type=str,
-                        choices=["date", "text", "num", "plz", "alpha_num", "spec_char", "shape"],
-                        default="date", help="type of text to be generated or replicate strings from json")
-    parser.add_argument("-s", "--show", action="store_true", help="show image(s) after generation")
-    parser.add_argument("-p", "--json_img_path", type=str, default="",
+    parser.add_argument("-s", "--show-images", action="store_true", help="show image(s) after generation")
+    parser.add_argument("-p", "--json-img-dir", type=str, default="",
                         help="dir path that should be prepended to every path in json file")
-    parser.add_argument("--save", action="store_true", help="save image(s) after generation")
+    parser.add_argument("--save-images", action="store_true", help="save image(s) after generation")
     parser.add_argument("-dn", "--dataset-name", type=str, help="name of the new dataset")
     parser.add_argument("-ji", "--in-json-path", type=str,
                         help="name of the json file that contains strings that should be replicated")
     parser.add_argument("-is", "--image-size", type=int, nargs=2, default=[64, 216],
                         help="size of the resulting images in the format (height, width)")
+    parser.add_argument("--unlabelled", action="store_true", default=False,
+                        help="if set no type label is assigned to the samples")
     args = parser.parse_args()
-    # TODO: unlabelled flag?
 
-    print(f"Generating images of size {args.image_size[0]}x{args.image_size[1]} (height x width)")
-
-    string_type = args.type
-    show_image = args.show
-    save_image = args.save
-    intermediate_dir = args.intermediate_dir
-    json_img_dir = args.json_img_path
-    out_json_path = intermediate_dir + args.dataset_name + ".json"
-    pil_image_size = (args.image_size[1], args.image_size[0])
-
-    dataset = get_string_dataset(args, string_type)
-
-    if save_image:
-        image_files = [fn for fn in os.listdir(intermediate_dir) if fn.endswith(".png")]
+    if args.save_images:
+        image_files = [fn for fn in os.listdir(args.intermediate_dir) if fn.endswith(".png")]
         assert not image_files, "There are already image files in the out dir"
 
-    img_list = []
-    for i, (generated_string, string_type) in enumerate(dataset):
-        # Generate image
-        if string_type == "shape":
-            img = generate_shapes(args.image_size)
-            font_name = ""
-        else:
-            img, font_name, _ = generate_image(generated_string, args.font_dir, pil_image_size)
+    types = args.types
+    out_json_path = args.intermediate_dir + args.dataset_name + ".json"
+    args.pil_image_size = (args.image_size[1], args.image_size[0])
+    print(f"Generating images of size {args.image_size[0]}x{args.image_size[1]} (height x width)")
 
-        # Generate filename
-        if string_type in ["spec_char", "shape"]:
-            max_num_id_digits = len(str(args.num))
-            cleansed_string = f"{i:0{max_num_id_digits}d}_{string_type}"
-        else:
-            cleansed_string = generated_string.replace("/", "_").replace(" ", "_")
-        img_name = f"{cleansed_string}"
-        if font_name != "":  # shapes don't have a font
-            img_name += f"-{os.path.splitext(font_name)[0]}"
+    full_img_list = []
+    for string_type in types:
+        img_list = generate_images_for_string_type(string_type, args)
+        full_img_list.extend(img_list)
 
-        img_path = os.path.join(intermediate_dir, f"{img_name}.png")
-        json_img_path = os.path.join(json_img_dir, f"{img_name}.png")
-
-        if show_image:
-            img.show()
-
-        if save_image:
-            with open(img_path, "wb+") as img_file:
-                img.save(img_file, format="PNG")
-
-        info = {
-            "string": generated_string,
-            "type": string_type,
-            "path": json_img_path,
-            "font": font_name
-        }
-        img_list.append(info)
-
-    if save_image:
+    if args.save_images:
         with open(out_json_path, "w+") as json_file:
-            json.dump(img_list, json_file, ensure_ascii=False, indent=4)
-        create_tar(args.dataset_name, out_json_path, intermediate_dir, args.tar_dir, args.final_dir)
+            json.dump(full_img_list, json_file, ensure_ascii=False, indent=4)
+        create_tar(args.dataset_name, out_json_path, args.intermediate_dir, args.tar_dir, args.final_dir)
 
 
 if __name__ == "__main__":
