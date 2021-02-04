@@ -213,7 +213,7 @@ def main():
         assert not image_files, "There are already image files in the out dir"
 
     types = args.types
-    out_json_path = args.intermediate_dir + args.dataset_name + ".json"
+    out_json_path = os.path.join(args.intermediate_dir, args.dataset_name + ".json")
     args.pil_image_size = (args.image_size[1], args.image_size[0])
     print(f"Generating images of size {args.image_size[0]}x{args.image_size[1]} (height x width)")
 

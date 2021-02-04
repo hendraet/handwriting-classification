@@ -38,28 +38,68 @@ def get_args():
     parser.add_argument("-sl", "--sample-limits", type=int,
                         help="limits the number of samples for each partition, 'None' if a partition shouldn't be "
                              "limited")
+    parser.add_argument("-nb", "--no-balancing", action="store_true", default=False,
+                        help="doesn't balance the different classes")
     args = parser.parse_args()
+
+    assert not (args.no_balancing and args.sample_limits is not None), "--no-balancing and --sample-limits are " \
+                                                                       "mutually exclusive"
 
     if args.sample_limits is None:
         args.sample_limits = [None] * len(args.partition_percentages)
 
-    assert sum(args.partition_percentages) == 1.0
-    assert len(args.partition_percentages) == len(args.sample_limits)
-    assert len(args.partition_percentages) == len(args.partition_names)
+    assert sum(args.partition_percentages) == 1.0, "Partition percentages have to add up to 1.0"
+    assert len(args.partition_percentages) == len(args.sample_limits), "Number of partition percentages and sample " \
+                                                                       "limits have to match"
+    assert len(args.partition_percentages) == len(args.partition_names), "Number of partition percentages and " \
+                                                                         "partition names have to match"
 
     return args
 
 
+def get_balanced_partitions(dataset, partition_percentages, sample_limits):
+    new_dataset_partitions = [[] for _ in partition_percentages]
+    max_len_per_class = min([len(ds) for ds in dataset.values()])
+    partition_indices = []
+
+    for i, partition_percentage in enumerate(partition_percentages):
+        partition_start_idx = int(max_len_per_class * sum(partition_percentages[:i]))
+        if sample_limits[i] is None:
+            partition_end_idx = partition_start_idx + int(max_len_per_class * partition_percentage)
+        else:
+            assert sample_limits[i] < max_len_per_class
+            partition_end_idx = partition_start_idx + sample_limits[i]
+        partition_indices.append((partition_start_idx, partition_end_idx))
+
+    for samples in dataset.values():
+        random.shuffle(samples)  # Makes sure that no internal structure in the json file messes up dataset
+        for i, (partition_start_idx, partition_end_idx) in enumerate(partition_indices):
+            new_partition = [sample for sample in samples[partition_start_idx:partition_end_idx]]
+            new_dataset_partitions[i].extend(new_partition)
+
+    return new_dataset_partitions
+
+
+def get_unbalanced_partitions(dataset, partition_percentages):
+    new_dataset_partitions = [[] for _ in partition_percentages]
+    for samples in dataset.values():
+        num_samples = len(samples)
+        for i, partition_percentage in enumerate(partition_percentages):
+            partition_start_idx = int(num_samples * sum(partition_percentages[:i]))
+            partition_end_idx = partition_start_idx + int(num_samples * partition_percentage)
+            new_dataset_partitions[i].extend(samples[partition_start_idx:partition_end_idx])
+
+    return new_dataset_partitions
+
+
 def get_new_dataset_partitions(json_paths, balance_classes=True, partition_percentages=(1.0,), sample_limits=(None,),
                                allowed_classes=None):
-    if not balance_classes:
-        raise NotImplementedError
-
     dataset = {}
     for dataset_description_path in json_paths:
         with open(dataset_description_path, "r") as f:
             json_file = json.load(f)
 
+        print(f"{dataset_description_path}: {len(json_file)} samples")
         for sample in json_file:
             if allowed_classes is not None and sample["type"] not in allowed_classes:
                 continue
@@ -71,23 +111,10 @@ def get_new_dataset_partitions(json_paths, balance_classes=True, partition_perce
                 "orig_dir": os.path.dirname(dataset_description_path)
             })
 
-    max_len_per_class = min([len(ds) for ds in dataset.values()])  # Make dataset balanced
-    partition_indices = []
-    for i, partition_percentage in enumerate(partition_percentages):
-        partition_start_idx = int(max_len_per_class * sum(partition_percentages[:i]))
-        if sample_limits[i] is None:
-            partition_end_idx = partition_start_idx + int(max_len_per_class * partition_percentage)
-        else:
-            assert sample_limits[i] < max_len_per_class
-            partition_end_idx = partition_start_idx + sample_limits[i]
-        partition_indices.append((partition_start_idx, partition_end_idx))
-
-    new_dataset_partitions = [[] for _ in partition_indices]
-    for samples in dataset.values():
-        random.shuffle(samples)  # Makes sure that no internal structure in the json file messes up dataset
-        for i, (start_idx, end_idx) in enumerate(partition_indices):
-            new_partition = [sample for sample in samples[start_idx:end_idx]]
-            new_dataset_partitions[i].extend(new_partition)
+    if balance_classes:
+        new_dataset_partitions = get_balanced_partitions(dataset, partition_percentages, sample_limits)
+    else:
+        new_dataset_partitions = get_unbalanced_partitions(dataset, partition_percentages)
 
     for partition in new_dataset_partitions:
         random.shuffle(partition)
@@ -97,6 +124,9 @@ def get_new_dataset_partitions(json_paths, balance_classes=True, partition_perce
 
 def main():
     args = get_args()
+    balance_classes = not args.no_balancing
+    print(f"Balance classes: {balance_classes}")
+
     if args.allowed_classes is not None:
         print(f"Using only samples of classes: {', '.join(args.allowed_classes)}")
 
@@ -105,6 +135,7 @@ def main():
     print(f"Limiting sample numbers to {info_str}")
 
     partitions = get_new_dataset_partitions(args.json_paths,
+                                            balance_classes=balance_classes,
                                             partition_percentages=args.partition_percentages,
                                             sample_limits=args.sample_limits,
                                             allowed_classes=args.allowed_classes)
@@ -117,6 +148,7 @@ def main():
     # creating an extra set for the image paths to get rid of duplicates
     with tarfile.open(tar_filename, "w:bz2") as tar:
         for partition_suffix, partition in zip(args.partition_names, partitions):
+            print(f"Saving images for {partition_suffix} partition...")
             image_paths = {}
             partition_dir = os.path.join(new_dataset_dir, partition_suffix)
             os.makedirs(partition_dir)
@@ -126,7 +158,10 @@ def main():
             with open(out_json_path, "w") as out_file:
                 json.dump(all_sample_info, out_file, indent=4)
 
+            num_samples_in_partition = len(partition)
             for i, sample in enumerate(partition):
+                if ((i + 1) % 1000) == 0:
+                    print(f"Saving image {i + 1}/{num_samples_in_partition}")
                 filename = sample["sample_info"]["path"]
                 orig_dir = sample["orig_dir"]
                 if filename in image_paths:
