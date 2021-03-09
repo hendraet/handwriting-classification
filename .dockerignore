@@ -1,0 +1,14 @@
+cluster_images
+google-fonts
+misc
+share
+handwriting_embedding/best_models
+handwriting_embedding/datasets
+handwriting_embedding/*runs*
+handwriting_embedding/*.npy
+handwriting_embedding/*.pickle
+handwriting_embedding/result
+prep/dataset_descriptions
+prep/dataset_processing/iamondb
+prep/datasets
+prep/wpi
