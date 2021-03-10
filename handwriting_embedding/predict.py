@@ -9,9 +9,9 @@ from handwriting_embedding.models.classifier import CrossEntropyClassifier
 from handwriting_embedding.models.resnet import PooledResNet
 
 
-class HandwritingPredictor:
-    def __init__(self, prediction_config_path="prediction_config.json"):
-        self.gpu = 0  # TODO: how to set gpu
+class HandwritingClassifier:
+    def __init__(self, prediction_config_path="prediction_config.json", gpu=-1):
+        self.gpu = gpu
 
         with open(prediction_config_path) as prediction_config_file:
             prediction_config = json.load(prediction_config_file)
@@ -55,7 +55,7 @@ def debug():
     image_path = "datasets/action_649.png"
     image = Image.open(image_path)
 
-    predictor = HandwritingPredictor()
+    predictor = HandwritingClassifier()
     prediction_result = predictor.predict_image(image)
     print(prediction_result)
 
