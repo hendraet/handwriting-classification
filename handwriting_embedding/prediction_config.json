@@ -1,0 +1,11 @@
+{
+  "classes": [
+    "alpha_num",
+    "date",
+    "num",
+    "plz",
+    "text"
+  ],
+  "resnet_size": 18,
+  "model_path": "best_models/5CHPT_softmax_model.npz"
+}
