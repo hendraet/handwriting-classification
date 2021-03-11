@@ -1,4 +1,3 @@
-import argparse
 import base64
 import json
 import os
@@ -9,6 +8,8 @@ from pathlib import Path
 import celery
 from PIL import Image
 from celery import Celery
+
+from handwriting_embedding.predict import HandwritingClassifier
 
 
 class ClassificationTask(celery.Task):
@@ -42,6 +43,6 @@ def classify(task_data):
     io.seek(0)
 
     with Image.open(io) as decoded_image:
-        classification_result = predictor.predict_image(decoded_image)
+        classification_result = classify.handwriting_classifier.predict_image(decoded_image)
 
     return json.dumps(classification_result)
