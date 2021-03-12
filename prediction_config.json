@@ -7,5 +7,5 @@
     "text"
   ],
   "resnet_size": 18,
-  "model_path": "best_models/5CHPT_softmax_model.npz"
+  "model_path": "/models/5CHPT_softmax_model.npz"
 }

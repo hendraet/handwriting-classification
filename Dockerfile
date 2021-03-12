@@ -9,6 +9,7 @@ RUN sed -i 's/# deb-src/deb-src/' /etc/apt/sources.list && \
         python3-pip \
         python3-matplotlib \
         pkg-config \
+        netcat \
         zsh && \
     apt-get build-dep -y python3-matplotlib
 
@@ -21,9 +22,17 @@ ARG GID=100
 RUN groupadd -g $GID -o $UNAME
 RUN useradd -m -u $UID -g $GID -o -s /bin/zsh $UNAME
 
+ARG BASE=/app
+RUN mkdir -p ${BASE}
+WORKDIR ${BASE}
+
 RUN pip3 install cupy-cuda111
 COPY requirements_docker.txt requirements.txt
 RUN pip3 install -r requirements.txt
+
+ARG WAIT_DIR=/opt/wait-for
+RUN git clone https://github.com/eficode/wait-for.git ${WAIT_DIR}
+RUN chmod +x ${WAIT_DIR}/wait-for
 
 USER $UNAME
 RUN git clone https://github.com/robbyrussell/oh-my-zsh.git ~/.oh-my-zsh
