@@ -22,13 +22,10 @@ class HandwritingClassifier:
         self.base_model = PooledResNet(prediction_config["resnet_size"])
         self.model = CrossEntropyClassifier(self.base_model, len(classes))
 
-        print('loading model')
         with numpy.load(prediction_config["model_path"]) as f:
             chainer.serializers.NpzDeserializer(f, strict=True).load(self.model)
-        print("load model finished")
 
         if int(self.gpu) >= 0:
-            print("putting model to gpu")
             with chainer.using_device(chainer.get_device(self.gpu)):
                 self.base_model.to_device(self.gpu)
                 self.model.to_device(self.gpu)
