@@ -32,7 +32,7 @@ class ClassificationTask(celery.Task):
 
 
 broker_address = os.environ.get('BROKER_ADDRESS', 'localhost')
-app = Celery('classification', backend='rpc://', broker=f"pyamqp://guest@{broker_address}//")
+app = Celery('wpi_demo', backend='rpc://', broker=f"pyamqp://guest@{broker_address}//")
 
 
 @app.task(name='handwriting_classification', base=ClassificationTask)
@@ -43,6 +43,7 @@ def classify(task_data):
     io.seek(0)
 
     with Image.open(io) as decoded_image:
+        decoded_image = decoded_image.convert('RGB')
         classification_result = classify.handwriting_classifier.predict_image(decoded_image)
 
     return json.dumps(classification_result)

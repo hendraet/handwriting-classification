@@ -1,5 +1,6 @@
 import json
 
+import chainer
 import numpy
 from PIL import Image
 from chainer import backend, serializers, cuda
@@ -21,12 +22,13 @@ class HandwritingClassifier:
         self.base_model = PooledResNet(prediction_config["resnet_size"])
         self.model = CrossEntropyClassifier(self.base_model, len(classes))
 
-        if int(self.gpu) >= 0:
-            backend.get_device(self.gpu).use()
-            self.base_model.to_gpu()
-            self.model.to_gpu()
+        with numpy.load(prediction_config["model_path"]) as f:
+            chainer.serializers.NpzDeserializer(f, strict=True).load(self.model)
 
-        serializers.load_npz(prediction_config["model_path"], self.model)
+        if int(self.gpu) >= 0:
+            with chainer.using_device(chainer.get_device(self.gpu)):
+                self.base_model.to_device(self.gpu)
+                self.model.to_device(self.gpu)
 
     @staticmethod
     def image_to_array(image, xp):
