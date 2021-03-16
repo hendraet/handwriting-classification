@@ -48,12 +48,13 @@ class HandwritingClassifier:
         image_array = xp.array(image_array)
         image_batch = xp.expand_dims(image_array, 0)
         prediction, confidence = self.model.predict(image_batch, return_confidence=True)
+        confidence = chainer.backends.cuda.to_cpu(confidence)
 
         assert len(prediction) == 1 and len(confidence) == 1
         predicted_class_id = int(prediction[0])
         result = {
             "predicted_class": self.idx_to_label_map[predicted_class_id],
-            "confidence": confidence[0]
+            "confidence": float(confidence[0])
         }
 
         return result
