@@ -82,10 +82,15 @@ class CrossEntropyClassifier(Chain):
         report({'loss': loss}, self)
         return loss
 
-    def predict(self, x):
+    def predict(self, x, return_confidence=False):
         h = self.predictor(x)
         h = self.linear(h)
-        prediction = self.xp.argmax(F.softmax(h).array, axis=1)
-        return prediction
+        softmax_array = F.softmax(h).array
+        prediction = self.xp.argmax(softmax_array, axis=1)
+        if return_confidence:
+            confidence = self.xp.max(softmax_array, axis=1)
+            return prediction, confidence
+        else:
+            return prediction
 
 

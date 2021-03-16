@@ -5,8 +5,7 @@ from PIL import Image
 import numpy as np
 
 
-def image_to_array(path, invert_colours=False):
-    img = Image.open(path)
+def image_to_array(img, invert_colours=False):
     img_array = np.array(img, dtype='float32')
     img_array /= 255
     if img_array.ndim == 2:
@@ -14,6 +13,11 @@ def image_to_array(path, invert_colours=False):
     if invert_colours:
         img_array = 1 - img_array
     return np.transpose(img_array, (2, 0, 1))
+
+
+def image_array_from_path(path, invert_colours=False):
+    img = Image.open(path)
+    return image_to_array(img, invert_colours)
 
 
 def parse_json(dataset_dir, json_path):
@@ -26,7 +30,7 @@ def parse_json(dataset_dir, json_path):
         for i, sample in enumerate(json_content):
             if (i + 1) % 250 == 0:
                 print(f"Loading image {i + 1} of {num_samples}")
-            img = image_to_array(os.path.join(dataset_dir, sample['path']), invert_colours=True)
+            img = image_array_from_path(os.path.join(dataset_dir, sample['path']), invert_colours=True)
             dataset.append((img, sample["type"]))
             classes.add(sample["type"])
 
