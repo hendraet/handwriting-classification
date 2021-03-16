@@ -46,4 +46,4 @@ def classify(task_data):
         decoded_image = decoded_image.convert('RGB')
         classification_result = classify.handwriting_classifier.predict_image(decoded_image)
 
-    return json.dumps(classification_result)
+    return classification_result
