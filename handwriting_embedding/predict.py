@@ -8,6 +8,7 @@ from chainer.backends.cuda import GpuDevice
 from handwriting_embedding.dataset_utils import image_to_array
 from handwriting_embedding.models.classifier import CrossEntropyClassifier
 from handwriting_embedding.models.resnet import PooledResNet
+from prep.image_processing.binarise_imgs import binarise_pil_image
 from prep.image_processing.resize_images import resize_img
 
 
@@ -40,11 +41,19 @@ class HandwritingClassifier:
                 self.base_model.to_device(self.gpu)
                 self.model.to_device(self.gpu)
 
+    @staticmethod
+    def preprocess_image(image):
+        greyscale_image = image.convert("L")
+        binarised_image = binarise_pil_image(greyscale_image)
+        resized_image = resize_img(binarised_image, (216, 64), padding_color=255)
+        return resized_image
+
     def predict_image(self, image):
-        resized_image = resize_img(image, (216, 64), padding_color=255)
+        preprocessed_image = self.preprocess_image(image)
 
         xp = cuda.cupy if isinstance(self.model.device, GpuDevice) else numpy
-        image_array = image_to_array(resized_image, invert_colours=True)
+        image_array = image_to_array(preprocessed_image, invert_colours=True)
+
         image_array = xp.array(image_array)
         image_batch = xp.expand_dims(image_array, 0)
         prediction, confidence = self.model.predict(image_batch, return_confidence=True)
