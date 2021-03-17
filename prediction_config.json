@@ -7,5 +7,6 @@
     "text"
   ],
   "resnet_size": 18,
-  "model_path": "/models/5CHPT_softmax_model.npz"
+  "model_path": "/models/5CHPT_softmax_model.npz",
+  "input_image_size": [216, 64]
 }

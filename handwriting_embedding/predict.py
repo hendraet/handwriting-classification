@@ -30,6 +30,7 @@ class HandwritingClassifier:
         }
         self.idx_to_label_map = {i: long_class_label_dict[label] for i, label in enumerate(classes)}
 
+        self.input_image_size = prediction_config["input_image_size"]
         self.base_model = PooledResNet(prediction_config["resnet_size"])
         self.model = CrossEntropyClassifier(self.base_model, len(classes))
 
@@ -41,11 +42,10 @@ class HandwritingClassifier:
                 self.base_model.to_device(self.gpu)
                 self.model.to_device(self.gpu)
 
-    @staticmethod
-    def preprocess_image(image):
+    def preprocess_image(self, image):
         greyscale_image = image.convert("L")
         binarised_image = binarise_pil_image(greyscale_image)
-        resized_image = resize_img(binarised_image, (216, 64), padding_color=255)
+        resized_image = resize_img(binarised_image, self.input_image_size, padding_color=255)
         return resized_image
 
     def predict_image(self, image):
