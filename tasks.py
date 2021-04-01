@@ -1,5 +1,4 @@
-import base64
-import json
+import msgpack
 import os
 import sys
 from io import BytesIO
@@ -33,16 +32,21 @@ class ClassificationTask(celery.Task):
 
 broker_address = os.environ.get('BROKER_ADDRESS', 'localhost')
 app = Celery('wpi_demo', backend='rpc://', broker=f"pyamqp://guest@{broker_address}//")
-
+app.conf.update(
+    accept_content  = ['msgpack'],
+    task_serializer = 'msgpack',
+    result_serializer = 'msgpack',
+)
 
 @app.task(name='handwriting_classification', base=ClassificationTask)
 def classify(task_data):
     classify.initialize()
-    image = base64.b85decode(task_data['image'])
-    io = BytesIO(image)
-    io.seek(0)
+    bytes = msgpack.unpackb(task_data)
 
-    with Image.open(io) as decoded_image:
+    image_data = BytesIO(bytes)
+    image_data.seek(0)
+
+    with Image.open(image_data) as decoded_image:
         decoded_image = decoded_image.convert('RGB')
         classification_result = classify.handwriting_classifier.predict_image(decoded_image)
 
